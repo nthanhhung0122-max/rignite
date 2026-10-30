@@ -1,15 +1,14 @@
 """
 =============================================================================
  TOOL AUTO RIGNITE MINING (@RigniteBot) - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
- - Tự động lấy x-init-data tươi mới qua Telethon Session (Acc hungzai22)
- - Tự động Tap đào liên tục không nghỉ 24/7
- - Khi cạn Energy: Tự kích hoạt Boost Full-Energy ngay lập tức để đầy lại 6,000 Energy
- - Khi hết lượt Full-Energy: Chỉ chờ 10s cho Energy tự hồi là đào tiếp ngay (Không ngủ 30 phút)
- - Tự động thu hoạch mỏ đào Offline (/shift/collect) định kỳ mỗi 90s
- - Tự động quay Vòng quay may mắn (/wheel/spin)
- - Tự động mở Hộp quà bất ngờ (/surprise/claim)
- - Tự động điểm danh hàng ngày (/daily/claim)
- - Tự động kiểm tra & nhận thưởng Nhiệm vụ (/quests/claim)
+ - Dành riêng cho tài khoản: hungzai22
+ - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần lấy thủ công)
+ - Tự động Tap đào liên tục 24/7
+ - Tự động xem QC hồi đầy năng lượng (Nút 📺 dưới thanh Energy)
+ - Khi hết lượt QC trong ngày: Nghỉ 10s tự hồi là đào tiếp ngay
+ - Tự động thu hoạch mỏ đào Offline (/shift/collect) định kỳ 90s
+ - Tự động mở Hộp quà bất ngờ (/surprise/claim) + Quay vòng quay (/wheel/spin)
+ - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests
 =============================================================================
 """
 
@@ -76,7 +75,7 @@ def generate_device_info(acc_name):
     return dev_id, ua, fp
 
 def check_side_activities(headers, current_coins):
-    # 1. Thu hoach mo dao offline
+    # 1. Thu hoạch mỏ đào offline
     try:
         r_shift = requests.post(f"{API_BASE}/shift/collect", headers=headers, json={}, timeout=8).json()
         collected = r_shift.get("collected", 0)
@@ -86,7 +85,7 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 2. Mo hop qua bat ngo
+    # 2. Mở hộp quà bất ngờ
     try:
         r_sur = requests.post(f"{API_BASE}/surprise/claim", headers=headers, json={}, timeout=8).json()
         amt = r_sur.get("amount", 0)
@@ -96,7 +95,7 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. Vong quay may man
+    # 3. Vòng quay may mắn
     try:
         r_wheel = requests.post(f"{API_BASE}/wheel/spin", headers=headers, json={}, timeout=8).json()
         if r_wheel.get("ok"):
@@ -104,7 +103,7 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 4. Quests kiem tra & nhan thuong
+    # 4. Kiểm tra & nhận thưởng Quests
     try:
         r_q = requests.post(f"{API_BASE}/quests", headers=headers, json={}, timeout=8).json()
         quests = r_q.get("quests", [])
@@ -121,20 +120,39 @@ def check_side_activities(headers, current_coins):
 
     return current_coins
 
+def try_refill_energy_ad(headers):
+    """
+    Giả lập bấm nút Xem QC hồi đầy năng lượng ở dưới thanh Energy:
+    1. Gửi /ad/intent {"type": "full_energy"}
+    2. Gửi /boost/full-energy
+    """
+    try:
+        requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": "full_energy"}, timeout=8)
+        time.sleep(1)
+        r_refill = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=10)
+        if r_refill.status_code == 200:
+            d = r_refill.json()
+            return True, d.get("energy", 6000), d.get("coins", 0), d.get("fullEnergyLeft", 0)
+        else:
+            err = r_refill.json().get("error", "")
+            return False, 0, 0, err
+    except Exception as e:
+        return False, 0, 0, str(e)
+
 def start_continuous_mining():
     print(f"""
 {Fore.CYAN}======================================================================
      TOOL AUTO RIGNITE MINING - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
      - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
      - Tự động lấy x-init-data tươi mới qua Telethon
-     - Đào liên tục không nghỉ 30 phút
-     - Hết Energy tự kích hoạt Boost Full-Energy (Hồi đầy 6,000 Energy)
-     - Khi hết lượt Full-Energy: Chỉ nghỉ 10s cho năng lượng tự hồi là đào tiếp
+     - Đào liên tục không nghỉ (Không ngủ 30 phút)
+     - Xem QC hồi năng lượng (Nút 📺 dưới thanh Energy)
+     - Khi hết lượt QC trong ngày: Chờ 10s tự hồi là đào tiếp ngay
      - Tự động thu hoạch mỏ Offline + Điểm danh + Hộp quà + Vòng quay + Quests
 ======================================================================{Style.RESET_ALL}
     """)
 
-    # 1. Lay init-data tu dong qua Telethon
+    # 1. Lấy init-data tự động qua Telethon
     log("AUTH", "Đang kết nối Telegram lấy x-init-data tự động...", Fore.CYAN)
     init_data = asyncio.run(fetch_fresh_init(STRING_SESSION))
     if not init_data:
@@ -152,7 +170,7 @@ def start_continuous_mining():
         "user-agent": ua
     }
 
-    # 2. Dang nhap /auth
+    # 2. Đăng nhập /auth
     try:
         r_auth = requests.post(f"{API_BASE}/auth", headers=headers, json={"lang": "vi", "dev": dev_id, "fp": fp}, timeout=15)
         if r_auth.status_code != 200:
@@ -172,12 +190,12 @@ def start_continuous_mining():
         log("ERR", f"Lỗi kết nối /auth: {e}", Fore.RED)
         return
 
-    # Chuyen headers sang che do session token
+    # Chuyển headers sang session token
     headers["x-session"] = session_id
     headers.pop("x-init-data", None)
     time.sleep(1)
 
-    # 3. Diem danh hang ngay luc dau
+    # 3. Điểm danh hàng ngày
     try:
         r_daily = requests.post(f"{API_BASE}/daily/claim", headers=headers, json={}, timeout=8).json()
         if r_daily.get("reward", 0) > 0:
@@ -189,18 +207,18 @@ def start_continuous_mining():
 
     coins = check_side_activities(headers, coins)
 
-    # 4. VONG LAP DAO LIEN TUC 24/7 KHONG NGHI
+    # 4. VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
     log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ...", Fore.GREEN)
     last_side_check = time.time()
 
     while True:
         try:
-            # Dinh ky 90 giay kiem tra mỏ offline, hop qua, quests 1 lan
+            # Định kỳ 90s kiểm tra mỏ offline, hộp quà, quests 1 lần
             if time.time() - last_side_check >= 90:
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # Neu Energy >= 50 thi tap dao coin
+            # Nếu Energy >= 50 thì tap đào coin
             if energy >= 50:
                 tap_chunk = min(100, energy)
                 r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": tap_chunk}, timeout=10).json()
@@ -211,24 +229,22 @@ def start_continuous_mining():
                 time.sleep(random.uniform(0.9, 1.3))
 
             else:
-                # Khi Energy < 50: Thu kich hoat Boost Full-Energy
-                log("ENERGY", f"Năng lượng còn {energy}. Đang kích hoạt Boost Full-Energy...", Fore.CYAN)
-                r_refill = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=10)
+                # Khi Energy < 50: Kích hoạt Xem QC hồi đầy Energy (nút 📺 dưới thanh năng lượng)
+                log("ENERGY", f"Năng lượng còn {energy}. Đang xem QC hồi đầy Energy (nút 📺 dưới thanh năng lượng)...", Fore.CYAN)
+                ok, new_energy, new_coins, info = try_refill_energy_ad(headers)
                 
-                if r_refill.status_code == 200:
-                    d_ref = r_refill.json()
-                    energy = d_ref.get("energy", max_energy)
-                    coins = d_ref.get("coins", coins)
-                    full_left = d_ref.get("fullEnergyLeft", 0)
-                    log("REFILL_OK", f"⚡ KÍCH HOẠT FULL-ENERGY THÀNH CÔNG! Đầy {energy}/{max_energy} Energy (Còn {full_left} lượt). Đào tiếp ngay!", Fore.GREEN)
+                if ok:
+                    energy = new_energy
+                    coins = new_coins if new_coins > 0 else coins
+                    log("REFILL_OK", f"⚡ XEM QC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy (Còn {info} lượt QC hôm nay). Đào tiếp ngay!", Fore.GREEN)
                     time.sleep(1)
                     continue
                 else:
-                    # Khi da dung het luot Full-Energy hom nay: Chi nghi 10 giay cho Energy tu hoi phuc
-                    log("WAIT", f"Tạm hết lượt Full-Energy hôm nay. Chờ 10s cho năng lượng tự hồi phục rồi đào tiếp...", Fore.YELLOW)
+                    # Khi đã xem hết số lượt QC trong ngày: Chỉ nghỉ 10s cho năng lượng tự hồi rồi đào tiếp
+                    log("WAIT", f"Đã hết lượt xem QC hôm nay ({info}). Chờ 10s năng lượng tự hồi phục rồi đào tiếp...", Fore.YELLOW)
                     time.sleep(10)
                     
-                    # Lay lai thong tin Energy moi nhat tu server
+                    # Lấy lại thông tin Energy từ server
                     r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=10)
                     if r_me.status_code == 200:
                         d_me = r_me.json()
