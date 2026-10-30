@@ -1,31 +1,30 @@
-name: Auto Rignite Mining - Hungzai22 (24/7)
+name: Auto Rignite Hungzai 24/7
 
 on:
   workflow_dispatch:
   schedule:
-    # Tự động kích hoạt lại sau mỗi chu kỳ phòng khi runner hết giờ
-    - cron: '*/30 * * * *'
+    - cron: '0 */6 * * *'
 
 jobs:
-  run-mining:
+  run-rignite-hungzai:
     runs-on: ubuntu-latest
-    timeout-minutes: 350  # Chạy tối đa ~6 tiếng mỗi lượt của GitHub Actions
+    timeout-minutes: 350
 
     steps:
-      - name: Checkout mã nguồn
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cài đặt Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Cài đặt thư viện phụ thuộc
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests telethon colorama
+          pip install -r requirements.txt
 
-      - name: Chạy Bot Auto Rignite (Acc Hungzai22)
+      - name: Chay Auto Rignite Cho Acc Hungzai
         env:
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
