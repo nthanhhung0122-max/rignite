@@ -2,13 +2,15 @@
 =============================================================================
  TOOL AUTO RIGNITE MINING (@RigniteBot) - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
  - Dành riêng cho tài khoản: hungzai22
- - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần lấy thủ công)
+ - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần thủ công)
  - Tự động Tap đào liên tục 24/7
  - Tự động xem QC hồi đầy năng lượng (Nút 📺 dưới thanh Energy)
- - Khi hết lượt QC trong ngày: Nghỉ 10s tự hồi là đào tiếp ngay
+ - Tự động xem QC kiếm Coins/Rignite (Nút banner 🎬 ở dưới cùng: +10,000 Coins/lượt, 60 lượt/ngày)
+ - Khi hết lượt QC hồi năng lượng: Nghỉ 10s tự hồi là đào tiếp ngay
  - Tự động thu hoạch mỏ đào Offline (/shift/collect) định kỳ 90s
  - Tự động mở Hộp quà bất ngờ (/surprise/claim) + Quay vòng quay (/wheel/spin)
- - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests
+ - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests (/quests/claim)
+ - Tự động kết nối lại khi session hết hạn (Crash-proof 24/7)
 =============================================================================
 """
 
@@ -74,6 +76,39 @@ def generate_device_info(acc_name):
     fp = f"dev={dev_id} tz=Asia/Saigon webgl=Mali-G76 MC4 ua={ua[:160]}"[:300]
     return dev_id, ua, fp
 
+def perform_login():
+    """Tự động lấy token mới và đăng nhập lại Rignite"""
+    log("AUTH", "Đang kết nối Telegram lấy x-init-data tự động...", Fore.CYAN)
+    init_data = asyncio.run(fetch_fresh_init(STRING_SESSION))
+    if not init_data:
+        log("ERR", "Không thể lấy init-data từ @RigniteBot. Vui lòng kiểm tra lại mạng!", Fore.RED)
+        return None, None
+
+    dev_id, ua, fp = generate_device_info(ACCOUNT_NAME)
+    headers = {
+        "Content-Type": "application/json",
+        "x-rignite-ad-policy": "adexium_house:2026-09-06.1",
+        "x-init-data": init_data,
+        "x-tg-platform": "android",
+        "origin": "https://app.rignite.app",
+        "referer": "https://app.rignite.app/",
+        "user-agent": ua
+    }
+
+    try:
+        r_auth = requests.post(f"{API_BASE}/auth", headers=headers, json={"lang": "vi", "dev": dev_id, "fp": fp}, timeout=15)
+        if r_auth.status_code != 200:
+            log("ERR", f"Đăng nhập thất bại: {r_auth.text}", Fore.RED)
+            return None, None
+        auth_data = r_auth.json()
+        session_id = auth_data.get("sessionId")
+        headers["x-session"] = session_id
+        headers.pop("x-init-data", None)
+        return headers, auth_data
+    except Exception as e:
+        log("ERR", f"Lỗi kết nối /auth: {e}", Fore.RED)
+        return None, None
+
 def check_side_activities(headers, current_coins):
     # 1. Thu hoạch mỏ đào offline
     try:
@@ -122,7 +157,7 @@ def check_side_activities(headers, current_coins):
 
 def try_refill_energy_ad(headers):
     """
-    Giả lập bấm nút Xem QC hồi đầy năng lượng ở dưới thanh Energy:
+    Nút 📺 Xem QC hồi đầy Energy (ở ngay dưới thanh Energy):
     1. Gửi /ad/intent {"type": "full_energy"}
     2. Gửi /boost/full-energy
     """
@@ -139,6 +174,51 @@ def try_refill_energy_ad(headers):
     except Exception as e:
         return False, 0, 0, str(e)
 
+def try_watch_coins_ad(headers, current_coins):
+    """
+    Nút 🎬 Xem QC kiếm Rignite/Coins (Banner ở dưới cùng màn hình):
+    - Mỗi ngày có 60 lượt xem QC.
+    - Nhận từ +10,000 đến +2,500 Coins mỗi lượt.
+    - Giả lập xem QC Warhold House Ad trong 9 giây rồi gửi /ad/complete.
+    """
+    try:
+        r_intent = requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": "coins"}, timeout=8)
+        if r_intent.status_code != 200:
+            return current_coins, False, 30
+
+        d_intent = r_intent.json()
+        if not d_intent.get("ok"):
+            cd = d_intent.get("cooldown", 45)
+            return current_coins, False, max(cd, 15)
+
+        log("AD_COIN", "🎬 Đang xem QC kiếm Coins (9s)...", Fore.CYAN)
+        time.sleep(9)
+
+        payload = {
+            "network": "warhold",
+            "ymid": None,
+            "ms": 9150,
+            "tapGap": -1,
+            "adexiumTask": None,
+            "adexiumWid": None
+        }
+        r_comp = requests.post(f"{API_BASE}/ad/complete", headers=headers, json=payload, timeout=10)
+        if r_comp.status_code == 200 and r_comp.json().get("ok"):
+            r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=8)
+            if r_me.status_code == 200:
+                d_me = r_me.json()
+                new_coins = d_me.get("coins", current_coins)
+                diff = new_coins - current_coins
+                left = d_me.get("adCoinsLeft", 0)
+                today = d_me.get("adCoinsToday", 0)
+                log("AD_COIN", f"⚡ XEM QC THÀNH CÔNG! {Fore.GREEN}+{diff:,} Coins{Style.RESET_ALL} | Số dư: {Fore.GREEN}{new_coins:,}{Style.RESET_ALL} (Đã xem: {today}, Còn: {left} lượt hôm nay)", Fore.GREEN)
+                return new_coins, True, 45
+
+        return current_coins, False, 30
+    except Exception as e:
+        log("WARN", f"Lỗi xem QC Coins: {e}", Fore.YELLOW)
+        return current_coins, False, 30
+
 def start_continuous_mining():
     print(f"""
 {Fore.CYAN}======================================================================
@@ -147,55 +227,29 @@ def start_continuous_mining():
      - Tự động lấy x-init-data tươi mới qua Telethon
      - Đào liên tục không nghỉ (Không ngủ 30 phút)
      - Xem QC hồi năng lượng (Nút 📺 dưới thanh Energy)
-     - Khi hết lượt QC trong ngày: Chờ 10s tự hồi là đào tiếp ngay
+     - Xem QC kiếm Rignite/Coins (Nút 🎬 ở dưới cùng màn hình)
+     - Khi hết lượt QC hồi năng lượng: Chờ 10s tự hồi là đào tiếp ngay
      - Tự động thu hoạch mỏ Offline + Điểm danh + Hộp quà + Vòng quay + Quests
 ======================================================================{Style.RESET_ALL}
     """)
 
-    # 1. Lấy init-data tự động qua Telethon
-    log("AUTH", "Đang kết nối Telegram lấy x-init-data tự động...", Fore.CYAN)
-    init_data = asyncio.run(fetch_fresh_init(STRING_SESSION))
-    if not init_data:
-        log("ERR", "Không thể lấy init-data từ @RigniteBot. Vui lòng kiểm tra lại mạng!", Fore.RED)
+    # 1. Đăng nhập lần đầu
+    headers, auth_data = perform_login()
+    if not headers or not auth_data:
         return
 
-    dev_id, ua, fp = generate_device_info(ACCOUNT_NAME)
-    headers = {
-        "Content-Type": "application/json",
-        "x-rignite-ad-policy": "adexium_house:2026-09-06.1",
-        "x-init-data": init_data,
-        "x-tg-platform": "android",
-        "origin": "https://app.rignite.app",
-        "referer": "https://app.rignite.app/",
-        "user-agent": ua
-    }
+    u = auth_data.get("user", {})
+    coins = u.get("coins", 0)
+    energy = u.get("energy", 0)
+    max_energy = u.get("maxEnergy", 6000)
+    profit_per_hr = u.get("profitPerHour", 0)
 
-    # 2. Đăng nhập /auth
-    try:
-        r_auth = requests.post(f"{API_BASE}/auth", headers=headers, json={"lang": "vi", "dev": dev_id, "fp": fp}, timeout=15)
-        if r_auth.status_code != 200:
-            log("ERR", f"Đăng nhập thất bại: {r_auth.text}", Fore.RED)
-            return
-        auth_data = r_auth.json()
-        session_id = auth_data.get("sessionId")
-        u = auth_data.get("user", {})
-        coins = u.get("coins", 0)
-        energy = u.get("energy", 0)
-        max_energy = u.get("maxEnergy", 6000)
-        profit_per_hr = u.get("profitPerHour", 0)
+    log("PROFILE", f"Đăng nhập thành công: {Fore.YELLOW}{u.get('username') or u.get('telegramId')}{Style.RESET_ALL} (Level {u.get('level')})", Fore.GREEN)
+    log("WALLET", f"Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Tốc độ đào: {Fore.CYAN}{profit_per_hr:,}/h{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
 
-        log("PROFILE", f"Đăng nhập thành công: {Fore.YELLOW}{u.get('username') or u.get('telegramId')}{Style.RESET_ALL} (Level {u.get('level')})", Fore.GREEN)
-        log("WALLET", f"Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Tốc độ đào: {Fore.CYAN}{profit_per_hr:,}/h{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
-    except Exception as e:
-        log("ERR", f"Lỗi kết nối /auth: {e}", Fore.RED)
-        return
-
-    # Chuyển headers sang session token
-    headers["x-session"] = session_id
-    headers.pop("x-init-data", None)
     time.sleep(1)
 
-    # 3. Điểm danh hàng ngày
+    # 2. Điểm danh hàng ngày
     try:
         r_daily = requests.post(f"{API_BASE}/daily/claim", headers=headers, json={}, timeout=8).json()
         if r_daily.get("reward", 0) > 0:
@@ -207,21 +261,36 @@ def start_continuous_mining():
 
     coins = check_side_activities(headers, coins)
 
-    # 4. VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
+    # 3. VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
     log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ...", Fore.GREEN)
     last_side_check = time.time()
+    last_ad_coin_check = 0
 
     while True:
         try:
-            # Định kỳ 90s kiểm tra mỏ offline, hộp quà, quests 1 lần
+            # 1. Kiểm tra xem QC kiếm Coins ở dưới cùng định kỳ mỗi 50s
+            if time.time() - last_ad_coin_check >= 50:
+                coins, ok_ad, next_cd = try_watch_coins_ad(headers, coins)
+                last_ad_coin_check = time.time() - (50 - next_cd)
+
+            # 2. Định kỳ 90s kiểm tra mỏ offline, hộp quà, quests 1 lần
             if time.time() - last_side_check >= 90:
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # Nếu Energy >= 50 thì tap đào coin
+            # 3. Nếu Energy >= 50 thì tap đào coin
             if energy >= 50:
                 tap_chunk = min(100, energy)
                 r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": tap_chunk}, timeout=10).json()
+                
+                # Kiểm tra nếu session hết hạn -> Tự động login lại
+                if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION"]:
+                    log("REAUTH", "Session hết hạn, đang tự động kết nối lại Telegram lấy token mới...", Fore.YELLOW)
+                    new_headers, new_auth = perform_login()
+                    if new_headers:
+                        headers = new_headers
+                    continue
+
                 accepted = r_tap.get("accepted", tap_chunk)
                 coins = r_tap.get("coins", coins)
                 energy = r_tap.get("energy", energy - accepted)
@@ -241,7 +310,7 @@ def start_continuous_mining():
                     continue
                 else:
                     # Khi đã xem hết số lượt QC trong ngày: Chỉ nghỉ 10s cho năng lượng tự hồi rồi đào tiếp
-                    log("WAIT", f"Đã hết lượt xem QC hôm nay ({info}). Chờ 10s năng lượng tự hồi phục rồi đào tiếp...", Fore.YELLOW)
+                    log("WAIT", f"Đã hết lượt xem QC hồi năng lượng hôm nay ({info}). Chờ 10s năng lượng tự hồi phục rồi đào tiếp...", Fore.YELLOW)
                     time.sleep(10)
                     
                     # Lấy lại thông tin Energy từ server
