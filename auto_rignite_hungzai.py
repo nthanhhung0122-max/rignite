@@ -2,15 +2,14 @@
 =============================================================================
  TOOL AUTO RIGNITE MINING (@RigniteBot) - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
  - Dành riêng cho tài khoản: hungzai22
- - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần thủ công)
- - Tự động Tap đào liên tục 24/7
- - Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy tức thì (1,000,000 lượt - vô hạn)
+ - Cố định luôn đào 100 taps mỗi lần (không giảm lại)
+ - Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy tức thì (Vô hạn)
  - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG: Nhận +10K Coins & +2% pin (60 lượt/ngày)
  - Nút [📺 +25m] DƯỚI THANH ẮC QUY: Xem QC sạc pin khi ắc quy cạn (<85%)
  - Nút [Thu thập thu nhập thuộc địa] Ở DƯỚI CÙNG: Tự động gom coin mỏ đào & thuộc địa (/shift/collect)
  - Tự động mở Hộp quà bất ngờ (/surprise/claim) + Quay vòng quay (/wheel/spin)
  - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests (/quests/claim)
- - Tự động kết nối lại khi session hết hạn (Crash-proof 24/7)
+ - Tự động kết nối lại khi session hết hạn hoặc mở trùng phiên trên điện thoại
 =============================================================================
 """
 
@@ -110,7 +109,7 @@ def perform_login():
         return None, None
 
 def check_side_activities(headers, current_coins):
-    # 1. Thu thập thu nhập mỏ đào & thuộc địa (Nút Thu thập thuộc địa ở dưới cùng bên phải)
+    # 1. Thu thập thu nhập mỏ đào & thuộc địa
     try:
         r_shift = requests.post(f"{API_BASE}/shift/collect", headers=headers, json={}, timeout=8).json()
         collected = r_shift.get("collected", 0)
@@ -130,7 +129,7 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. Vòng quay may mắn (Bánh xe)
+    # 3. Bánh xe may mắn
     try:
         r_wheel = requests.post(f"{API_BASE}/wheel/spin", headers=headers, json={}, timeout=8).json()
         if r_wheel.get("ok"):
@@ -156,12 +155,7 @@ def check_side_activities(headers, current_coins):
     return current_coins
 
 def execute_ad_view(headers, ad_type, label):
-    """
-    Quy trình chuẩn xem và xác thực QC Warhold trên Rignite:
-    1. Gửi /ad/intent {type: ad_type}
-    2. Chờ 9 giây (thời lượng QC Warhold house ad)
-    3. Gửi /ad/complete xác thực
-    """
+    """Quy trình chuẩn xem và xác thực QC Warhold"""
     try:
         r_intent = requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": ad_type}, timeout=8)
         if r_intent.status_code != 200:
@@ -194,11 +188,7 @@ def execute_ad_view(headers, ad_type, label):
         return False, 0, str(e)
 
 def try_refill_energy_ad(headers):
-    """
-    Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG:
-    - Khi Energy cạn (<50): Xem QC hồi 100% (6,000 Energy) tức thì.
-    - Tài khoản có 1,000,000 lượt (vô hạn).
-    """
+    """Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy"""
     # 1. Thử dùng lượt Free trong Boost modal trước (nếu còn)
     try:
         r_boost = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=8)
@@ -208,7 +198,7 @@ def try_refill_energy_ad(headers):
     except Exception:
         pass
 
-    # 2. Bấm nút [📺 +%100] dưới thanh Năng lượng (Xem QC hồi 100% Energy)
+    # 2. Xem QC hồi 100% Energy
     ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi Năng Lượng [%100]")
     if ok and isinstance(res, dict):
         new_energy = res.get("energy", 6000)
@@ -219,11 +209,7 @@ def try_refill_energy_ad(headers):
     return False, 0, 0, str(res)
 
 def try_watch_coins_ad(headers, current_coins):
-    """
-    Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG BÊN TRÁI:
-    - Nhận +10,000 Coins/lượt và sạc +2% pin ắc quy.
-    - Mỗi ngày có 60 lượt xem QC.
-    """
+    """Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG"""
     ok, cd, res = execute_ad_view(headers, "coins", "Kiếm RGT/Coins [+10K RGT · 🔋 +%2]")
     if ok and isinstance(res, dict):
         new_coins = res.get("coins", current_coins)
@@ -239,29 +225,15 @@ def try_watch_coins_ad(headers, current_coins):
     next_wait = max(cd, 20) if cd > 0 else 30
     return current_coins, next_wait
 
-def try_refill_battery_ad(headers, battery_pct):
-    """
-    Nút [📺 +25m] DƯỚI THANH ẮC QUY:
-    - Khi pin ắc quy giảm xuống dưới 85%, xem QC sạc thêm +25 phút pin.
-    """
-    if battery_pct < 85:
-        ok, cd, res = execute_ad_view(headers, "battery", "Sạc Ắc Quy [+25m]")
-        if ok and isinstance(res, dict):
-            batt_energy = res.get("batteryEnergy", 0)
-            batt_cap = res.get("batteryCap", 1)
-            new_pct = int(batt_energy / batt_cap * 100)
-            log("BATTERY", f"⚡ SẠC ẮC QUY THÀNH CÔNG! Pin tăng lên: {new_pct}%", Fore.GREEN)
-
 def start_continuous_mining():
     print(f"""
 {Fore.CYAN}======================================================================
      TOOL AUTO RIGNITE MINING - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
      - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
      - Tự động lấy x-init-data tươi mới qua Telethon
-     - Đào liên tục không nghỉ 24/7
+     - Luôn đào 100 taps mỗi lần (Không giảm lại)
      - Nút [📺 +%100] Dưới Năng Lượng: Hồi 100% Energy tức thì (Vô hạn)
      - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Dưới Cùng: 60 lượt/ngày
-     - Nút [📺 +25m] Dưới Ắc Quy: Tự sạc pin khi ắc quy cạn
      - Nút [Thu thập thu nhập thuộc địa] Dưới Cùng: Tự động gom coin mỏ đào
      - Tự động Điểm danh + Hộp quà + Bánh xe + Nhiệm vụ
 ======================================================================{Style.RESET_ALL}
@@ -312,34 +284,34 @@ def start_continuous_mining():
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # 3. Nếu Energy >= 50 thì tap đào coin
-            if energy >= 50:
-                tap_chunk = min(100, energy)
-                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": tap_chunk}, timeout=10).json()
+            # 3. Luôn tap 100 đào (cứ tap 100, không giảm lại)
+            if energy >= 100:
+                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": 100}, timeout=10).json()
                 
-                # Kiểm tra nếu session hết hạn -> Tự động login lại
-                if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION"]:
-                    log("REAUTH", "Session hết hạn, đang tự động kết nối lại Telegram lấy token mới...", Fore.YELLOW)
+                # Kiểm tra nếu session hết hạn hoặc mở trên điện thoại -> Tự động login lại
+                if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION", "SESSION_TAKEN"]:
+                    log("REAUTH", "Session hết hạn hoặc mở trên đt, đang tự động kết nối lại Telegram lấy session mới...", Fore.YELLOW)
+                    time.sleep(2)
                     new_headers, new_auth = perform_login()
                     if new_headers:
                         headers = new_headers
                     continue
 
-                accepted = r_tap.get("accepted", tap_chunk)
+                accepted = r_tap.get("accepted", 100)
                 coins = r_tap.get("coins", coins)
                 energy = r_tap.get("energy", energy - accepted)
-                log("TAP", f"Đào +{accepted} taps | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
-                time.sleep(random.uniform(0.9, 1.3))
+                log("TAP", f"Đào +100 taps | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
+                time.sleep(random.uniform(1.0, 1.3))
 
             else:
-                # Khi Energy < 50: Kích hoạt Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG
+                # Khi Energy < 100: Bấm ngay Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG để hồi 100% Energy
                 log("ENERGY", f"Năng lượng còn {energy}. Đang bấm nút [📺 +%100] dưới thanh năng lượng để hồi 100% Energy...", Fore.CYAN)
                 ok, new_energy, new_coins, info = try_refill_energy_ad(headers)
                 
                 if ok:
                     energy = new_energy
                     coins = new_coins if new_coins > 0 else coins
-                    log("REFILL_OK", f"⚡ HỒI PHỤC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy ({info}). Đào tiếp ngay!", Fore.GREEN)
+                    log("REFILL_OK", f"⚡ HỒI PHỤC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy ({info}). Tiếp tục đào 100 taps ngay!", Fore.GREEN)
                     time.sleep(1)
                     continue
                 else:
