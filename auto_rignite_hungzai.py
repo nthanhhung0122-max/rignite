@@ -4,10 +4,10 @@
  - Dành riêng cho tài khoản: hungzai22
  - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần thủ công)
  - Tự động Tap đào liên tục 24/7
- - Tự động xem QC hồi đầy năng lượng (Nút 📺 dưới thanh Energy)
- - Tự động xem QC kiếm Coins/Rignite (Nút banner 🎬 ở dưới cùng: +10,000 Coins/lượt, 60 lượt/ngày)
- - Khi hết lượt QC hồi năng lượng: Nghỉ 10s tự hồi là đào tiếp ngay
- - Tự động thu hoạch mỏ đào Offline (/shift/collect) định kỳ 90s
+ - Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy tức thì (1,000,000 lượt - vô hạn)
+ - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG: Nhận +10K Coins & +2% pin (60 lượt/ngày)
+ - Nút [📺 +25m] DƯỚI THANH ẮC QUY: Xem QC sạc pin khi ắc quy cạn (<85%)
+ - Nút [Thu thập thu nhập thuộc địa] Ở DƯỚI CÙNG: Tự động gom coin mỏ đào & thuộc địa (/shift/collect)
  - Tự động mở Hộp quà bất ngờ (/surprise/claim) + Quay vòng quay (/wheel/spin)
  - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests (/quests/claim)
  - Tự động kết nối lại khi session hết hạn (Crash-proof 24/7)
@@ -110,13 +110,13 @@ def perform_login():
         return None, None
 
 def check_side_activities(headers, current_coins):
-    # 1. Thu hoạch mỏ đào offline
+    # 1. Thu thập thu nhập mỏ đào & thuộc địa (Nút Thu thập thuộc địa ở dưới cùng bên phải)
     try:
         r_shift = requests.post(f"{API_BASE}/shift/collect", headers=headers, json={}, timeout=8).json()
         collected = r_shift.get("collected", 0)
         if collected > 0:
             current_coins = r_shift.get("coins", current_coins + collected)
-            log("SHIFT", f"Thu hoạch mỏ offline: {Fore.GREEN}+{collected:,} Coins{Style.RESET_ALL} (Tổng: {current_coins:,})", Fore.GREEN)
+            log("COLONY", f"Thu thập thu nhập thuộc địa: {Fore.GREEN}+{collected:,} Coins{Style.RESET_ALL} (Tổng: {current_coins:,})", Fore.GREEN)
     except Exception:
         pass
 
@@ -130,15 +130,15 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. Vòng quay may mắn
+    # 3. Vòng quay may mắn (Bánh xe)
     try:
         r_wheel = requests.post(f"{API_BASE}/wheel/spin", headers=headers, json={}, timeout=8).json()
         if r_wheel.get("ok"):
-            log("WHEEL", f"Vòng quay may mắn: {Fore.GREEN}+{r_wheel.get('amount')} {r_wheel.get('kind')}{Style.RESET_ALL}", Fore.MAGENTA)
+            log("WHEEL", f"Bánh xe may mắn: {Fore.GREEN}+{r_wheel.get('amount')} {r_wheel.get('kind')}{Style.RESET_ALL}", Fore.MAGENTA)
     except Exception:
         pass
 
-    # 4. Kiểm tra & nhận thưởng Quests
+    # 4. Kiểm tra & nhận thưởng Nhiệm vụ
     try:
         r_q = requests.post(f"{API_BASE}/quests", headers=headers, json={}, timeout=8).json()
         quests = r_q.get("quests", [])
@@ -155,43 +155,24 @@ def check_side_activities(headers, current_coins):
 
     return current_coins
 
-def try_refill_energy_ad(headers):
+def execute_ad_view(headers, ad_type, label):
     """
-    Nút 📺 Xem QC hồi đầy Energy (ở ngay dưới thanh Energy):
-    1. Gửi /ad/intent {"type": "full_energy"}
-    2. Gửi /boost/full-energy
-    """
-    try:
-        requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": "full_energy"}, timeout=8)
-        time.sleep(1)
-        r_refill = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=10)
-        if r_refill.status_code == 200:
-            d = r_refill.json()
-            return True, d.get("energy", 6000), d.get("coins", 0), d.get("fullEnergyLeft", 0)
-        else:
-            err = r_refill.json().get("error", "")
-            return False, 0, 0, err
-    except Exception as e:
-        return False, 0, 0, str(e)
-
-def try_watch_coins_ad(headers, current_coins):
-    """
-    Nút 🎬 Xem QC kiếm Rignite/Coins (Banner ở dưới cùng màn hình):
-    - Mỗi ngày có 60 lượt xem QC.
-    - Nhận từ +10,000 đến +2,500 Coins mỗi lượt.
-    - Giả lập xem QC Warhold House Ad trong 9 giây rồi gửi /ad/complete.
+    Quy trình chuẩn xem và xác thực QC Warhold trên Rignite:
+    1. Gửi /ad/intent {type: ad_type}
+    2. Chờ 9 giây (thời lượng QC Warhold house ad)
+    3. Gửi /ad/complete xác thực
     """
     try:
-        r_intent = requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": "coins"}, timeout=8)
+        r_intent = requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": ad_type}, timeout=8)
         if r_intent.status_code != 200:
-            return current_coins, False, 30
+            return False, 0, "Lỗi kết nối /ad/intent"
 
         d_intent = r_intent.json()
         if not d_intent.get("ok"):
-            cd = d_intent.get("cooldown", 45)
-            return current_coins, False, max(cd, 15)
+            cd = d_intent.get("cooldown", 0)
+            return False, cd, d_intent.get("error", "Cooldown hoặc hết lượt")
 
-        log("AD_COIN", "🎬 Đang xem QC kiếm Coins (9s)...", Fore.CYAN)
+        log("AD", f"📺 Đang xem QC {label} (9s)...", Fore.CYAN)
         time.sleep(9)
 
         payload = {
@@ -206,18 +187,70 @@ def try_watch_coins_ad(headers, current_coins):
         if r_comp.status_code == 200 and r_comp.json().get("ok"):
             r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=8)
             if r_me.status_code == 200:
-                d_me = r_me.json()
-                new_coins = d_me.get("coins", current_coins)
-                diff = new_coins - current_coins
-                left = d_me.get("adCoinsLeft", 0)
-                today = d_me.get("adCoinsToday", 0)
-                log("AD_COIN", f"⚡ XEM QC THÀNH CÔNG! {Fore.GREEN}+{diff:,} Coins{Style.RESET_ALL} | Số dư: {Fore.GREEN}{new_coins:,}{Style.RESET_ALL} (Đã xem: {today}, Còn: {left} lượt hôm nay)", Fore.GREEN)
-                return new_coins, True, 45
+                return True, 0, r_me.json()
 
-        return current_coins, False, 30
+        return False, 0, r_comp.text
     except Exception as e:
-        log("WARN", f"Lỗi xem QC Coins: {e}", Fore.YELLOW)
-        return current_coins, False, 30
+        return False, 0, str(e)
+
+def try_refill_energy_ad(headers):
+    """
+    Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG:
+    - Khi Energy cạn (<50): Xem QC hồi 100% (6,000 Energy) tức thì.
+    - Tài khoản có 1,000,000 lượt (vô hạn).
+    """
+    # 1. Thử dùng lượt Free trong Boost modal trước (nếu còn)
+    try:
+        r_boost = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=8)
+        if r_boost.status_code == 200:
+            d = r_boost.json()
+            return True, d.get("energy", 6000), d.get("coins", 0), "Free Boost"
+    except Exception:
+        pass
+
+    # 2. Bấm nút [📺 +%100] dưới thanh Năng lượng (Xem QC hồi 100% Energy)
+    ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi Năng Lượng [%100]")
+    if ok and isinstance(res, dict):
+        new_energy = res.get("energy", 6000)
+        new_coins = res.get("coins", 0)
+        today = res.get("adEnergyToday", 0)
+        return True, new_energy, new_coins, f"Lượt xem thứ {today}"
+
+    return False, 0, 0, str(res)
+
+def try_watch_coins_ad(headers, current_coins):
+    """
+    Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG BÊN TRÁI:
+    - Nhận +10,000 Coins/lượt và sạc +2% pin ắc quy.
+    - Mỗi ngày có 60 lượt xem QC.
+    """
+    ok, cd, res = execute_ad_view(headers, "coins", "Kiếm RGT/Coins [+10K RGT · 🔋 +%2]")
+    if ok and isinstance(res, dict):
+        new_coins = res.get("coins", current_coins)
+        diff = new_coins - current_coins
+        left = res.get("adCoinsLeft", 0)
+        today = res.get("adCoinsToday", 0)
+        batt_energy = res.get("batteryEnergy", 0)
+        batt_cap = res.get("batteryCap", 1)
+        batt_pct = int(batt_energy / batt_cap * 100) if batt_cap > 0 else 100
+        log("AD_COIN", f"⚡ XEM QC THÀNH CÔNG! {Fore.GREEN}+{diff:,} RGT Coins{Style.RESET_ALL} (🔋 Pin: {batt_pct}%) | Số dư: {Fore.GREEN}{new_coins:,}{Style.RESET_ALL} (Đã xem: {today}/60)", Fore.GREEN)
+        return new_coins, 45
+
+    next_wait = max(cd, 20) if cd > 0 else 30
+    return current_coins, next_wait
+
+def try_refill_battery_ad(headers, battery_pct):
+    """
+    Nút [📺 +25m] DƯỚI THANH ẮC QUY:
+    - Khi pin ắc quy giảm xuống dưới 85%, xem QC sạc thêm +25 phút pin.
+    """
+    if battery_pct < 85:
+        ok, cd, res = execute_ad_view(headers, "battery", "Sạc Ắc Quy [+25m]")
+        if ok and isinstance(res, dict):
+            batt_energy = res.get("batteryEnergy", 0)
+            batt_cap = res.get("batteryCap", 1)
+            new_pct = int(batt_energy / batt_cap * 100)
+            log("BATTERY", f"⚡ SẠC ẮC QUY THÀNH CÔNG! Pin tăng lên: {new_pct}%", Fore.GREEN)
 
 def start_continuous_mining():
     print(f"""
@@ -225,11 +258,12 @@ def start_continuous_mining():
      TOOL AUTO RIGNITE MINING - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
      - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
      - Tự động lấy x-init-data tươi mới qua Telethon
-     - Đào liên tục không nghỉ (Không ngủ 30 phút)
-     - Xem QC hồi năng lượng (Nút 📺 dưới thanh Energy)
-     - Xem QC kiếm Rignite/Coins (Nút 🎬 ở dưới cùng màn hình)
-     - Khi hết lượt QC hồi năng lượng: Chờ 10s tự hồi là đào tiếp ngay
-     - Tự động thu hoạch mỏ Offline + Điểm danh + Hộp quà + Vòng quay + Quests
+     - Đào liên tục không nghỉ 24/7
+     - Nút [📺 +%100] Dưới Năng Lượng: Hồi 100% Energy tức thì (Vô hạn)
+     - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Dưới Cùng: 60 lượt/ngày
+     - Nút [📺 +25m] Dưới Ắc Quy: Tự sạc pin khi ắc quy cạn
+     - Nút [Thu thập thu nhập thuộc địa] Dưới Cùng: Tự động gom coin mỏ đào
+     - Tự động Điểm danh + Hộp quà + Bánh xe + Nhiệm vụ
 ======================================================================{Style.RESET_ALL}
     """)
 
@@ -268,12 +302,12 @@ def start_continuous_mining():
 
     while True:
         try:
-            # 1. Kiểm tra xem QC kiếm Coins ở dưới cùng định kỳ mỗi 50s
+            # 1. Kiểm tra xem QC Kiếm RGT Coins ở dưới cùng định kỳ mỗi 50s
             if time.time() - last_ad_coin_check >= 50:
-                coins, ok_ad, next_cd = try_watch_coins_ad(headers, coins)
+                coins, next_cd = try_watch_coins_ad(headers, coins)
                 last_ad_coin_check = time.time() - (50 - next_cd)
 
-            # 2. Định kỳ 90s kiểm tra mỏ offline, hộp quà, quests 1 lần
+            # 2. Định kỳ 90s thu thập thu nhập thuộc địa, hộp quà, bánh xe, quests
             if time.time() - last_side_check >= 90:
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
@@ -298,19 +332,19 @@ def start_continuous_mining():
                 time.sleep(random.uniform(0.9, 1.3))
 
             else:
-                # Khi Energy < 50: Kích hoạt Xem QC hồi đầy Energy (nút 📺 dưới thanh năng lượng)
-                log("ENERGY", f"Năng lượng còn {energy}. Đang xem QC hồi đầy Energy (nút 📺 dưới thanh năng lượng)...", Fore.CYAN)
+                # Khi Energy < 50: Kích hoạt Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG
+                log("ENERGY", f"Năng lượng còn {energy}. Đang bấm nút [📺 +%100] dưới thanh năng lượng để hồi 100% Energy...", Fore.CYAN)
                 ok, new_energy, new_coins, info = try_refill_energy_ad(headers)
                 
                 if ok:
                     energy = new_energy
                     coins = new_coins if new_coins > 0 else coins
-                    log("REFILL_OK", f"⚡ XEM QC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy (Còn {info} lượt QC hôm nay). Đào tiếp ngay!", Fore.GREEN)
+                    log("REFILL_OK", f"⚡ HỒI PHỤC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy ({info}). Đào tiếp ngay!", Fore.GREEN)
                     time.sleep(1)
                     continue
                 else:
-                    # Khi đã xem hết số lượt QC trong ngày: Chỉ nghỉ 10s cho năng lượng tự hồi rồi đào tiếp
-                    log("WAIT", f"Đã hết lượt xem QC hồi năng lượng hôm nay ({info}). Chờ 10s năng lượng tự hồi phục rồi đào tiếp...", Fore.YELLOW)
+                    # Nếu đang trong cooldown tạm thời: Chỉ chờ 10s cho năng lượng tự hồi rồi đào tiếp
+                    log("WAIT", f"Chờ 10s năng lượng tự hồi phục rồi tiếp tục đào...", Fore.YELLOW)
                     time.sleep(10)
                     
                     # Lấy lại thông tin Energy từ server
