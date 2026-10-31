@@ -1,15 +1,22 @@
 """
 =============================================================================
- TOOL AUTO RIGNITE MINING (@RigniteBot) - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
+ TOOL AUTO RIGNITE MINING (@RigniteBot) - CHẾ ĐỘ SIÊU TỐC NON-STOP 24/7
  - Dành riêng cho tài khoản: hungzai22
- - Cố định luôn đào 100 taps mỗi lần (không giảm lại)
- - Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy tức thì (Vô hạn)
- - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG: Nhận +10K Coins & +2% pin (60 lượt/ngày)
- - Nút [📺 +25m] DƯỚI THANH ẮC QUY: Xem QC sạc pin khi ắc quy cạn (<85%)
- - Nút [Thu thập thu nhập thuộc địa] Ở DƯỚI CÙNG: Tự động gom coin mỏ đào & thuộc địa (/shift/collect)
- - Tự động mở Hộp quà bất ngờ (/surprise/claim) + Quay vòng quay (/wheel/spin)
- - Tự động điểm danh hàng ngày (/daily/claim) + Nhận thưởng Quests (/quests/claim)
- - Tự động kết nối lại khi session hết hạn hoặc mở trùng phiên trên điện thoại
+ - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần thủ công)
+ - TÍNH NĂNG MỚI ĐỘT PHÁ:
+   1. ĐÀO SIÊU TỐC QUÉT SẠCH NĂNG LƯỢNG (Count = 600):
+      - 1 phát tap quét sạch 6,000 Energy trong đúng 1 giây!
+   2. HỒI PHỤC NĂNG LƯỢNG CỰC NHANH (KHÔNG NGHỈ 10S):
+      - Ngay khi cạn năng lượng, tự động xem QC hồi đầy 100% (6,000 Energy).
+      - Không có thời gian chết nhân tạo, chạy liên tục với tốc độ tối đa!
+   3. AUTO MINIGAME ĐẬP KIM CƯƠNG JACKPOT 10X (5/5 Lượt Perfect mỗi ngày):
+      - Tự động gửi lệnh đạt điểm cao nhất "perfect" ăn trọn coins và săn Jackpot!
+   4. AUTO ĐẤU TRƯỜNG PVP ARENA (5 Lượt đánh thắng 100% mỗi ngày):
+      - Quét danh sách đối thủ, tự động chọn mục tiêu yếu hơn để 100% chiến thắng.
+      - Thưởng: +1,000 RGT Coins & +25 Điểm Rank leo Top BXH thế giới!
+   5. AUTO SPARK BOOST RANDOM (+15% Tốc độ đào mỏ miễn phí):
+      - Tự động bắn tia năng lượng nhận hiệu ứng buff tăng tốc sản lượng.
+   6. AUTO GOM TIỀN THUỘC ĐỊA, HỘP QUÀ, VÒNG QUAY, NHIỆM VỤ, ĐIỂM DANH LIÊN TỤC.
 =============================================================================
 """
 
@@ -38,13 +45,13 @@ API_HASH = "f02b155d895a3a3fbf8a1cbe810b5338"
 API_BASE = "https://api.rignite.app"
 WEBAPP_URL = "https://app.rignite.app/"
 
-# CẤU HÌNH DUY NHẤT ACC HUNGZAI22
+# TÀI KHOẢN HUNGZAI22
 ACCOUNT_NAME = "hungzai22"
-STRING_SESSION = os.getenv("TELEGRAM_STRING_SESSION_ACC1") or "1BVtsOHIBuxmpWiBJ9hvwV9pSrzWw5U2I5Fe20Ww8l1LCk9rnsG6T6lLZEJXZE1JJC_qUH_yyWHnRoedRNI5lJYnfjRN4gyGeDrCxquDU12ZflrpCz0VLhMZx2C0LlyUCy2eHRSRE1wUCpEYZaymL0P7Z9eAHwMy4Oogewh5TqyO4x4MF6j0yTq8Zvfpv43O4aQDzErNv3GRqpx8DXBcOJIMP9yVhq-Mby5VH5J9cF-h-bJ5ws3xKjA4GY7YKjHxDt9OI-Zr7mr-V3qZy99UxJooThJj51f2RqOKhODdLh9XZQ0ygSoAd3iFAZDOPMEo8Ch5TrrzLXi2Q3N0HorIL1JfV0xoFQlY="
+STRING_SESSION = os.getenv("TELEGRAM_STRING_SESSION_ACC1") or os.getenv("TELEGRAM_STRING_SESSION") or "1BVtsOHIBuxmpWiBJ9hvwV9pSrzWw5U2I5Fe20Ww8l1LCk9rnsG6T6lLZEJXZE1JJC_qUH_yyWHnRoedRNI5lJYnfjRN4gyGeDrCxquDU12ZflrpCz0VLhMZx2C0LlyUCy2eHRSRE1wUCpEYZaymL0P7Z9eAHwMy4Oogewh5TqyO4x4MF6j0yTq8Zvfpv43O4aQDzErNv3GRqpx8DXBcOJIMP9yVhq-Mby5VH5J9cF-h-bJ5ws3xKjA4GY7YKjHxDt9OI-Zr7mr-V3qZy99UxJooThJj51f2RqOKhODdLh9XZQ0ygSoAd3iFAZDOPMEo8Ch5TrrzLXi2Q3N0HorIL1JfV0xoFQlY="
 
 def log(tag, msg, color=Fore.WHITE):
     t_str = time.strftime('%H:%M:%S')
-    print(f"{Fore.LIGHTBLACK_EX}[{t_str}]{Style.RESET_ALL} {color}[{tag}]{Style.RESET_ALL} {msg}")
+    print(f"{Fore.LIGHTBLACK_EX}[{t_str}]{Style.RESET_ALL} {color}[{tag:13s}]{Style.RESET_ALL} {msg}")
 
 async def fetch_fresh_init(session_str):
     try:
@@ -109,17 +116,63 @@ def perform_login():
         return None, None
 
 def check_side_activities(headers, current_coins):
-    # 1. Thu thập thu nhập mỏ đào & thuộc địa
+    """Kiểm tra và tự động húp toàn bộ phần thưởng ngầm & sự kiện"""
+    
+    # 1. Thu thập thu nhập mỏ đào & thuộc địa (/shift/collect)
     try:
         r_shift = requests.post(f"{API_BASE}/shift/collect", headers=headers, json={}, timeout=8).json()
         collected = r_shift.get("collected", 0)
         if collected > 0:
             current_coins = r_shift.get("coins", current_coins + collected)
-            log("COLONY", f"Thu thập thu nhập thuộc địa: {Fore.GREEN}+{collected:,} Coins{Style.RESET_ALL} (Tổng: {current_coins:,})", Fore.GREEN)
+            log("COLONY", f"Thu thập thuộc địa: {Fore.GREEN}+{collected:,} Coins{Style.RESET_ALL} (Tổng: {current_coins:,})", Fore.GREEN)
     except Exception:
         pass
 
-    # 2. Mở hộp quà bất ngờ
+    # 2. AUTO MINIGAME ĐẬP KIM CƯƠNG PERFECT 5/5 LƯỢT MỖI NGÀY
+    try:
+        for _ in range(5):
+            r_mg = requests.post(f"{API_BASE}/minigame/claim", headers=headers, json={"grade": "perfect"}, timeout=8).json()
+            if r_mg.get("reward", 0) > 0:
+                current_coins = r_mg.get("coins", current_coins + r_mg.get("reward"))
+                jp_str = " 💎 [JACKPOT x10!]" if r_mg.get("jackpot") else ""
+                log("MINIGAME", f"💎 ĐẬP KIM CƯƠNG PERFECT! {Fore.GREEN}+{r_mg.get('reward'):,} Coins{jp_str}{Style.RESET_ALL} (Còn {r_mg.get('left')} lượt)", Fore.MAGENTA)
+            else:
+                break
+    except Exception:
+        pass
+
+    # 3. AUTO ĐẤU TRƯỜNG PVP ARENA (5 LƯỢT ĐÁNH THẮNG 100%)
+    try:
+        r_pvp = requests.post(f"{API_BASE}/pvp/durum", headers=headers, json={}, timeout=8).json()
+        arena = r_pvp.get("arena", {})
+        my_atk = r_pvp.get("guc", {}).get("saldiri", 0)
+        left_attacks = arena.get("kalanSaldiri", 0)
+        rakipler = arena.get("rakipler", [])
+
+        if left_attacks > 0 and rakipler:
+            for opp in rakipler:
+                opp_def = opp.get("savunmaGucu", 999999)
+                if opp_def < my_atk:
+                    # Mục tiêu yếu hơn lực chiến -> Đánh là 100% thắng!
+                    payload = {"eslesmeId": opp.get("eslesmeId"), "komutId": str(uuid.uuid4())}
+                    r_bat = requests.post(f"{API_BASE}/pvp/arena/savas", headers=headers, json=payload, timeout=8).json()
+                    savas = r_bat.get("savas", {})
+                    if savas.get("kazandi"):
+                        current_coins = r_bat.get("coins", current_coins)
+                        log("ARENA_WIN", f"⚔️ THẮNG ĐẤU TRƯỜNG vs {opp.get('ad')}! {Fore.GREEN}+{savas.get('odulRgt')} RGT Coins{Style.RESET_ALL} (+{savas.get('puanDegisimi')} Điểm Rank | Rank: {savas.get('yeniPuan')})", Fore.GREEN)
+                    break
+    except Exception:
+        pass
+
+    # 4. AUTO SPARK BOOST RANDOM (+15% TỐC ĐỘ ĐÀO)
+    try:
+        r_sp = requests.post(f"{API_BASE}/spark/random", headers=headers, json={}, timeout=8).json()
+        if r_sp.get("selfBoostUntil"):
+            log("SPARK", f"⚡ Kích hoạt SPARK BOOST (+15% sản lượng đào) tới bạn bè!", Fore.CYAN)
+    except Exception:
+        pass
+
+    # 5. Mở hộp quà bất ngờ (/surprise/claim)
     try:
         r_sur = requests.post(f"{API_BASE}/surprise/claim", headers=headers, json={}, timeout=8).json()
         amt = r_sur.get("amount", 0)
@@ -129,15 +182,15 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. Bánh xe may mắn
+    # 6. Vòng quay may mắn (/wheel/spin)
     try:
         r_wheel = requests.post(f"{API_BASE}/wheel/spin", headers=headers, json={}, timeout=8).json()
         if r_wheel.get("ok"):
-            log("WHEEL", f"Bánh xe may mắn: {Fore.GREEN}+{r_wheel.get('amount')} {r_wheel.get('kind')}{Style.RESET_ALL}", Fore.MAGENTA)
+            log("WHEEL", f"Vòng quay may mắn: {Fore.GREEN}+{r_wheel.get('amount')} {r_wheel.get('kind')}{Style.RESET_ALL}", Fore.MAGENTA)
     except Exception:
         pass
 
-    # 4. Kiểm tra & nhận thưởng Nhiệm vụ
+    # 7. Kiểm tra & nhận thưởng Nhiệm vụ (/quests/claim)
     try:
         r_q = requests.post(f"{API_BASE}/quests", headers=headers, json={}, timeout=8).json()
         quests = r_q.get("quests", [])
@@ -155,7 +208,12 @@ def check_side_activities(headers, current_coins):
     return current_coins
 
 def execute_ad_view(headers, ad_type, label):
-    """Quy trình chuẩn xem và xác thực QC Warhold"""
+    """
+    Quy trình chuẩn xem và xác thực QC Warhold trên Rignite:
+    1. Gửi /ad/intent {type: ad_type}
+    2. Chờ đúng 9.15s (thời lượng video Warhold bắt buộc)
+    3. Gửi /ad/complete xác thực
+    """
     try:
         r_intent = requests.post(f"{API_BASE}/ad/intent", headers=headers, json={"type": ad_type}, timeout=8)
         if r_intent.status_code != 200:
@@ -166,8 +224,8 @@ def execute_ad_view(headers, ad_type, label):
             cd = d_intent.get("cooldown", 0)
             return False, cd, d_intent.get("error", "Cooldown hoặc hết lượt")
 
-        log("AD", f"📺 Đang xem QC {label} (9s)...", Fore.CYAN)
-        time.sleep(9)
+        log("AD", f"📺 Đang xem QC {label} (9.15s)...", Fore.CYAN)
+        time.sleep(9.15)
 
         payload = {
             "network": "warhold",
@@ -188,38 +246,39 @@ def execute_ad_view(headers, ad_type, label):
         return False, 0, str(e)
 
 def try_refill_energy_ad(headers):
-    """Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG: Xem QC hồi 100% Energy"""
-    # 1. Thử dùng lượt Free trong Boost modal trước (nếu còn)
+    """
+    Hồi 100% Năng Lượng (6,000 Energy) tức thì:
+    - Kiểm tra lượt Free Boost trước.
+    - Xem QC Warhold (chuẩn 9.15s) hồi 100% Energy.
+    """
     try:
         r_boost = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=8)
-        if r_boost.status_code == 200:
+        if r_boost.status_code == 200 and r_boost.json().get("energy"):
             d = r_boost.json()
             return True, d.get("energy", 6000), d.get("coins", 0), "Free Boost"
     except Exception:
         pass
 
-    # 2. Xem QC hồi 100% Energy
-    ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi Năng Lượng [%100]")
+    ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi 100% Năng Lượng")
     if ok and isinstance(res, dict):
         new_energy = res.get("energy", 6000)
         new_coins = res.get("coins", 0)
         today = res.get("adEnergyToday", 0)
-        return True, new_energy, new_coins, f"Lượt xem thứ {today}"
+        return True, new_energy, new_coins, f"Lượt thứ {today}"
 
-    return False, 0, 0, str(res)
+    return False, cd, 0, str(res)
 
 def try_watch_coins_ad(headers, current_coins):
-    """Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Ở DƯỚI CÙNG"""
-    ok, cd, res = execute_ad_view(headers, "coins", "Kiếm RGT/Coins [+10K RGT · 🔋 +%2]")
+    """Xem QC nhận +10,000 Coins & sạc 2% pin (60 lượt/ngày)"""
+    ok, cd, res = execute_ad_view(headers, "coins", "Kiếm Coins [+10K RGT · 🔋 +%2]")
     if ok and isinstance(res, dict):
         new_coins = res.get("coins", current_coins)
         diff = new_coins - current_coins
-        left = res.get("adCoinsLeft", 0)
         today = res.get("adCoinsToday", 0)
         batt_energy = res.get("batteryEnergy", 0)
         batt_cap = res.get("batteryCap", 1)
         batt_pct = int(batt_energy / batt_cap * 100) if batt_cap > 0 else 100
-        log("AD_COIN", f"⚡ XEM QC THÀNH CÔNG! {Fore.GREEN}+{diff:,} RGT Coins{Style.RESET_ALL} (🔋 Pin: {batt_pct}%) | Số dư: {Fore.GREEN}{new_coins:,}{Style.RESET_ALL} (Đã xem: {today}/60)", Fore.GREEN)
+        log("AD_COIN", f"⚡ XEM QC THÀNH CÔNG! {Fore.GREEN}+{diff:,} RGT Coins{Style.RESET_ALL} (🔋 Pin: {batt_pct}%) | Số dư: {Fore.GREEN}{new_coins:,}{Style.RESET_ALL} ({today}/60)", Fore.GREEN)
         return new_coins, 45
 
     next_wait = max(cd, 20) if cd > 0 else 30
@@ -228,18 +287,18 @@ def try_watch_coins_ad(headers, current_coins):
 def start_continuous_mining():
     print(f"""
 {Fore.CYAN}======================================================================
-     TOOL AUTO RIGNITE MINING - CHẾ ĐỘ ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
-     - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
-     - Tự động lấy x-init-data tươi mới qua Telethon
-     - Luôn đào 100 taps mỗi lần (Không giảm lại)
-     - Nút [📺 +%100] Dưới Năng Lượng: Hồi 100% Energy tức thì (Vô hạn)
-     - Nút [🎬 Xem & Kiếm tiền -> +10K RGT · 🔋 +%2] Dưới Cùng: 60 lượt/ngày
-     - Nút [Thu thập thu nhập thuộc địa] Dưới Cùng: Tự động gom coin mỏ đào
-     - Tự động Điểm danh + Hộp quà + Bánh xe + Nhiệm vụ
+  ⚡ TOOL AUTO RIGNITE MINING - CHẾ ĐỘ SIÊU TỐC NON-STOP 24/7 🚀
+  - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
+  - Tự động lấy x-init-data tươi mới qua Telethon
+  - Quét sạch năng lượng: Tap 600 phát một lượt (xóa sổ thanh 6000 Energy trong 1s)
+  - Hồi phục năng lượng thần tốc: Xem QC Warhold chuẩn 9.15s, KHÔNG NGHỈ 10s
+  - Auto Minigame Perfect 5/5 lượt săn Kim Cương & Jackpot 10x
+  - Auto PVP Arena 5/5 lượt thắng 100% (+1K RGT & Leo Rank)
+  - Auto Spark Boost (+15% sản lượng đào)
+  - Auto Gom Coin Thuộc Địa + Hộp Quà + Vòng Quay + Nhiệm Vụ
 ======================================================================{Style.RESET_ALL}
     """)
 
-    # 1. Đăng nhập lần đầu
     headers, auth_data = perform_login()
     if not headers or not auth_data:
         return
@@ -250,12 +309,12 @@ def start_continuous_mining():
     max_energy = u.get("maxEnergy", 6000)
     profit_per_hr = u.get("profitPerHour", 0)
 
-    log("PROFILE", f"Đăng nhập thành công: {Fore.YELLOW}{u.get('username') or u.get('telegramId')}{Style.RESET_ALL} (Level {u.get('level')})", Fore.GREEN)
+    log("PROFILE", f"Đăng nhập thành công: {Fore.YELLOW}@{u.get('username') or u.get('telegramId')}{Style.RESET_ALL} (Level {u.get('level')})", Fore.GREEN)
     log("WALLET", f"Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Tốc độ đào: {Fore.CYAN}{profit_per_hr:,}/h{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
 
     time.sleep(1)
 
-    # 2. Điểm danh hàng ngày
+    # 1. Điểm danh hàng ngày
     try:
         r_daily = requests.post(f"{API_BASE}/daily/claim", headers=headers, json={}, timeout=8).json()
         if r_daily.get("reward", 0) > 0:
@@ -267,71 +326,72 @@ def start_continuous_mining():
 
     coins = check_side_activities(headers, coins)
 
-    # 3. VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ
-    log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO LIÊN TỤC 24/7 KHÔNG NGHỈ...", Fore.GREEN)
+    # 2. VÒNG LẶP ĐÀO SIÊU TỐC NON-STOP 24/7
+    log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO SIÊU TỐC KHÔNG NGHỈ...", Fore.GREEN)
     last_side_check = time.time()
     last_ad_coin_check = 0
 
     while True:
         try:
-            # 1. Kiểm tra xem QC Kiếm RGT Coins ở dưới cùng định kỳ mỗi 50s
+            # A. Kiểm tra QC kiếm coin định kỳ 50s
             if time.time() - last_ad_coin_check >= 50:
                 coins, next_cd = try_watch_coins_ad(headers, coins)
                 last_ad_coin_check = time.time() - (50 - next_cd)
 
-            # 2. Định kỳ 90s thu thập thu nhập thuộc địa, hộp quà, bánh xe, quests
+            # B. Kiểm tra sự kiện phụ (Minigame, PVP, Spark, Thuộc địa) mỗi 90s
             if time.time() - last_side_check >= 90:
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # 3. Luôn tap 100 đào (cứ tap 100, không giảm lại)
-            if energy >= 100:
-                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": 100}, timeout=10).json()
-                
-                # Kiểm tra nếu session hết hạn hoặc mở trên điện thoại -> Tự động login lại
+            # C. QUÉT SẠCH NĂNG LƯỢNG SIÊU TỐC: Tap 600 (xóa sổ thanh năng lượng tức thì)
+            if energy >= 10:
+                # Gửi tap 600 để tiêu thụ tối đa lên tới 6,000 Energy trong 1 lượt request!
+                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": 600}, timeout=10).json()
+
                 if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION", "SESSION_TAKEN"]:
-                    log("REAUTH", "Session hết hạn hoặc mở trên đt, đang tự động kết nối lại Telegram lấy session mới...", Fore.YELLOW)
+                    log("REAUTH", "Session hết hạn hoặc mở trên đt, đang tự động kết nối lại lấy session mới...", Fore.YELLOW)
                     time.sleep(2)
                     new_headers, new_auth = perform_login()
                     if new_headers:
                         headers = new_headers
                     continue
 
-                accepted = r_tap.get("accepted", 100)
+                accepted = r_tap.get("accepted", 0)
                 coins = r_tap.get("coins", coins)
-                energy = r_tap.get("energy", energy - accepted)
-                log("TAP", f"Đào +100 taps | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
-                time.sleep(random.uniform(1.0, 1.3))
+                energy = r_tap.get("energy", 0)
+                used_energy = accepted * 10
+                log("TAP_FAST", f"⚡ QUÉT SIÊU TỐC: -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
+                time.sleep(0.5)
 
-            else:
-                # Khi Energy < 100: Bấm ngay Nút [📺 +%100] DƯỚI THANH NĂNG LƯỢNG để hồi 100% Energy
-                log("ENERGY", f"Năng lượng còn {energy}. Đang bấm nút [📺 +%100] dưới thanh năng lượng để hồi 100% Energy...", Fore.CYAN)
-                ok, new_energy, new_coins, info = try_refill_energy_ad(headers)
-                
+            # D. HỒI PHỤC NĂNG LƯỢNG NGAY LẬP TỨC (KHÔNG NGHỈ 10S)
+            if energy < 10:
+                log("ENERGY", f"Năng lượng còn {energy}. Bấm ngay nút [📺 +%100] hồi 6,000 Energy không chờ...", Fore.CYAN)
+                ok, cd_or_energy, new_coins, info = try_refill_energy_ad(headers)
+
                 if ok:
-                    energy = new_energy
+                    energy = cd_or_energy
                     coins = new_coins if new_coins > 0 else coins
-                    log("REFILL_OK", f"⚡ HỒI PHỤC THÀNH CÔNG! Đầy {energy}/{max_energy} Energy ({info}). Tiếp tục đào 100 taps ngay!", Fore.GREEN)
-                    time.sleep(1)
+                    log("REFILL_OK", f"⚡ HỒI PHỤC THẦN TỐC! Đầy {energy}/{max_energy} Energy ({info}). Tiếp tục quét sạch 600 taps ngay!", Fore.GREEN)
                     continue
                 else:
-                    # Nếu đang trong cooldown tạm thời: Chỉ chờ 10s cho năng lượng tự hồi rồi đào tiếp
-                    log("WAIT", f"Chờ 10s năng lượng tự hồi phục rồi tiếp tục đào...", Fore.YELLOW)
-                    time.sleep(10)
-                    
-                    # Lấy lại thông tin Energy từ server
-                    r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=10)
+                    # Nếu server có cooldown thực tế (thường 2-3s), chỉ đợi đúng số giây đó rồi quất tiếp!
+                    wait_time = max(1, int(cd_or_energy)) if isinstance(cd_or_energy, (int, float)) and cd_or_energy > 0 else 2
+                    log("CD_FAST", f"Server hồi chiêu QC {wait_time}s, sẵn sàng quất tiếp ngay lập tức...", Fore.YELLOW)
+                    time.sleep(wait_time)
+
+                    # Lấy lại trạng thái energy thực tế
+                    r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=8)
                     if r_me.status_code == 200:
                         d_me = r_me.json()
                         energy = d_me.get("energy", energy)
                         coins = d_me.get("coins", coins)
 
         except Exception as e:
-            log("WARN", f"Lỗi tạm thời: {e}. Thử lại sau 5s...", Fore.YELLOW)
-            time.sleep(5)
+            log("WARN", f"Lỗi tạm thời: {e}. Tiếp tục ngay sau 2s...", Fore.YELLOW)
+            time.sleep(2)
 
 if __name__ == "__main__":
     try:
         start_continuous_mining()
     except KeyboardInterrupt:
-        print(f"\n{Fore.YELLOW}[THOÁT] Đã dừng chương trình theo yêu cầu.{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}[THOÁT] Đã dừng chương trình an toàn.{Style.RESET_ALL}")
