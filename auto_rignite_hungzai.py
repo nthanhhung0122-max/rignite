@@ -26,6 +26,7 @@ import sys
 import time
 import json
 import random
+import re
 import uuid
 import asyncio
 import urllib.parse
@@ -295,6 +296,80 @@ def check_side_activities(headers, current_coins):
 
     return current_coins
 
+def auto_claim_rignite_codes(headers, session_str, current_coins):
+    """Tự động cào mã từ nhóm @RigniteOfficial và nhập nhận quà cho tài khoản"""
+    log("CODES", "📡 Đang quét tìm mã code mới trong nhóm @RigniteOfficial...", Fore.CYAN)
+    try:
+        async def fetch_codes():
+            client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
+            await client.connect()
+            entity = await client.get_entity('RigniteOfficial')
+            messages = await client.get_messages(entity, limit=25)
+            await client.disconnect()
+            
+            codes = {'cipher': None, 'battery': None, 'energy': None, 'gifts': []}
+            for m in messages:
+                text = m.text or ""
+                if not codes['cipher']:
+                    mc = re.search(r'\b(RIG-[A-F0-9]{6})\b', text, re.IGNORECASE)
+                    if mc: codes['cipher'] = mc.group(1).upper()
+                if not codes['battery']:
+                    mb = re.search(r'\b(BAT-[A-F0-9]{6})\b', text, re.IGNORECASE)
+                    if mb: codes['battery'] = mb.group(1).upper()
+                if not codes['energy']:
+                    me = re.search(r'\b(NRG-[A-F0-9]{6})\b', text, re.IGNORECASE)
+                    if me: codes['energy'] = me.group(1).upper()
+                mg = re.findall(r'\b(RG-[A-Z0-9]{6})\b', text, re.IGNORECASE)
+                for g in mg:
+                    g_up = g.upper()
+                    if g_up not in codes['gifts']:
+                        codes['gifts'].append(g_up)
+            return codes
+
+        found_codes = asyncio.run(fetch_codes())
+        
+        # 1. Nhập Daily Cipher (Mật mã ngày +15,000 Coins)
+        if found_codes['cipher']:
+            code = found_codes['cipher']
+            r_c = requests.post(f"{API_BASE}/cipher/claim", headers=headers, json={"code": code}, timeout=8).json()
+            if r_c.get("ok"):
+                rew = r_c.get("reward", 15000)
+                current_coins = r_c.get("coins", current_coins + rew)
+                log("CIPHER", f"🔑 Nhập mã Cipher [{code}] thành công! {Fore.GREEN}+{rew:,} Coins{Style.RESET_ALL}", Fore.GREEN)
+            else:
+                log("CIPHER", f"Mã Cipher [{code}]: Đã nhận hôm nay hoặc hết hạn", Fore.LIGHTBLACK_EX)
+                
+        # 2. Nhập Battery Code (Sạc đầy 100% Pin thuộc địa)
+        if found_codes['battery']:
+            code = found_codes['battery']
+            r_b = requests.post(f"{API_BASE}/battery-code/claim", headers=headers, json={"code": code}, timeout=8).json()
+            if r_b.get("ok"):
+                log("BATT_CODE", f"🔋 Nhập mã Pin [{code}] thành công! Sạc đầy pin: {r_b.get('batteryEnergy', 0):,}/{r_b.get('batteryCap', 0):,}!", Fore.GREEN)
+            else:
+                log("BATT_CODE", f"Mã Pin [{code}]: Đã nhận hôm nay hoặc hết hạn", Fore.LIGHTBLACK_EX)
+                
+        # 3. Nhập Energy Code (Bơm đầy 100% Năng lượng Tap)
+        if found_codes['energy']:
+            code = found_codes['energy']
+            r_e = requests.post(f"{API_BASE}/energy-code/claim", headers=headers, json={"code": code}, timeout=8).json()
+            if r_e.get("ok"):
+                log("NRG_CODE", f"⚡ Nhập mã Năng Lượng [{code}] thành công! Năng lượng đầy: {r_e.get('energy', 0):,}!", Fore.GREEN)
+            else:
+                log("NRG_CODE", f"Mã Năng Lượng [{code}]: Đã nhận hôm nay hoặc hết hạn", Fore.LIGHTBLACK_EX)
+                
+        # 4. Nhập Gift Codes (Nếu có)
+        for g_code in found_codes['gifts']:
+            r_g = requests.post(f"{API_BASE}/gift/claim", headers=headers, json={"code": g_code}, timeout=8).json()
+            if r_g.get("ok"):
+                log("GIFT_CODE", f"🎁 Nhập mã Gift [{g_code}] thành công: {r_g.get('metin', 'Thành công')}!", Fore.GREEN)
+            else:
+                log("GIFT_CODE", f"Mã Gift [{g_code}]: Đã nhận hoặc không hợp lệ", Fore.LIGHTBLACK_EX)
+
+    except Exception as e:
+        log("CODES", f"Lỗi cào mã tự động: {e}", Fore.LIGHTBLACK_EX)
+        
+    return current_coins
+
 def execute_ad_view(headers, ad_type, label):
     """
     Quy trình chuẩn xem và xác thực QC Warhold trên Rignite:
@@ -420,14 +495,20 @@ def start_continuous_mining():
         pass
 
     coins = check_side_activities(headers, coins)
+    coins = auto_claim_rignite_codes(headers, STRING_SESSION, coins)
 
     # 2. VÒNG LẶP ĐÀO SIÊU TỐC NON-STOP 24/7
     log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO SIÊU TỐC KHÔNG NGHỈ...", Fore.GREEN)
     last_side_check = time.time()
     last_ad_coin_check = 0
+    last_code_check = time.time()
 
     while True:
         try:
+            # 0. Quét & Nhập mã mới từ nhóm Rignite định kỳ mỗi 30 phút
+            if time.time() - last_code_check >= 1800:
+                coins = auto_claim_rignite_codes(headers, STRING_SESSION, coins)
+                last_code_check = time.time()
             # A. Kiểm tra QC kiếm coin định kỳ 50s
             if time.time() - last_ad_coin_check >= 50:
                 coins, next_cd = try_watch_coins_ad(headers, coins)
