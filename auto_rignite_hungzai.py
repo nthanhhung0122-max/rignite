@@ -142,26 +142,72 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. AUTO ĐẤU TRƯỜNG PVP ARENA (5 LƯỢT ĐÁNH THẮNG 100%)
+    # 3. AUTO PVP ARENA + CHIẾN DỊCH XÂM LƯỢC (İSTİLA / INVASION) + HUẤN LUYỆN LÍNH
     try:
         r_pvp = requests.post(f"{API_BASE}/pvp/durum", headers=headers, json={}, timeout=8).json()
-        arena = r_pvp.get("arena", {})
-        my_atk = r_pvp.get("guc", {}).get("saldiri", 0)
-        left_attacks = arena.get("kalanSaldiri", 0)
-        rakipler = arena.get("rakipler", [])
+        if r_pvp.get("ok"):
+            guc = r_pvp.get("guc", {})
+            my_atk = guc.get("saldiri", 0)
+            my_def = guc.get("savunma", 0)
 
-        if left_attacks > 0 and rakipler:
-            for opp in rakipler:
-                opp_def = opp.get("savunmaGucu", 999999)
-                if opp_def < my_atk:
-                    # Mục tiêu yếu hơn lực chiến -> Đánh là 100% thắng!
-                    payload = {"eslesmeId": opp.get("eslesmeId"), "komutId": str(uuid.uuid4())}
-                    r_bat = requests.post(f"{API_BASE}/pvp/arena/savas", headers=headers, json=payload, timeout=8).json()
-                    savas = r_bat.get("savas", {})
+            # 3A. Đấu trường PVP Arena (5/5 lượt đánh thắng 100%)
+            arena = r_pvp.get("arena", {})
+            left_attacks = arena.get("kalanSaldiri", 0)
+            rakipler = arena.get("rakipler", [])
+            if left_attacks > 0 and rakipler:
+                for opp in rakipler:
+                    opp_def = opp.get("savunmaGucu", 999999)
+                    if opp_def < my_atk:
+                        payload = {"eslesmeId": opp.get("eslesmeId"), "komutId": str(uuid.uuid4())}
+                        r_bat = requests.post(f"{API_BASE}/pvp/arena/savas", headers=headers, json=payload, timeout=8).json()
+                        savas = r_bat.get("savas", {})
+                        if savas.get("kazandi"):
+                            current_coins = r_bat.get("coins", current_coins)
+                            log("ARENA_WIN", f"⚔️ THẮNG ĐẤU TRƯỜNG vs {opp.get('ad')}! {Fore.GREEN}+{savas.get('odulRgt')} RGT Coins{Style.RESET_ALL} (+{savas.get('puanDegisimi')} Điểm Rank | Rank: {savas.get('yeniPuan')})", Fore.GREEN)
+                        break
+
+            # 3B. Chiến dịch XÂM LƯỢC (İSTİLA / INVASION - 3 Lượt mỗi ngày)
+            istila = r_pvp.get("istila", {})
+            kalan_hak = istila.get("kalanHak", 0)
+            seviye = istila.get("seviye", 1)
+            dusman_gucu = istila.get("gosterilenDusmanGucu", 6000)
+            is_completed = istila.get("tamamlandi", False)
+
+            if not is_completed and kalan_hak > 0:
+                tur = "saldiri" if (seviye % 2 == 1) else "savunma"
+                tur_name = "Tấn công Tiền đồn" if tur == "saldiri" else "Phòng thủ Thuộc địa"
+                oyuncu_gucu = my_atk if tur == "saldiri" else my_def
+
+                if oyuncu_gucu >= dusman_gucu:
+                    log("INVASION", f"🏴‍☠️ XUẤT KÍCH XÂM LƯỢC Ải {seviye} ({tur_name}): Ta {oyuncu_gucu} vs Địch {dusman_gucu}...", Fore.YELLOW)
+                    payload = {
+                        "seviye": seviye,
+                        "kurguSurumu": 4,
+                        "beklenenOyuncuGucu": oyuncu_gucu,
+                        "beklenenDusmanGucu": dusman_gucu,
+                        "komutId": str(uuid.uuid4())
+                    }
+                    r_ist = requests.post(f"{API_BASE}/pvp/istila/savas", headers=headers, json=payload, timeout=8).json()
+                    savas = r_ist.get("savas", {})
                     if savas.get("kazandi"):
-                        current_coins = r_bat.get("coins", current_coins)
-                        log("ARENA_WIN", f"⚔️ THẮNG ĐẤU TRƯỜNG vs {opp.get('ad')}! {Fore.GREEN}+{savas.get('odulRgt')} RGT Coins{Style.RESET_ALL} (+{savas.get('puanDegisimi')} Điểm Rank | Rank: {savas.get('yeniPuan')})", Fore.GREEN)
-                    break
+                        rew_rgt = savas.get("odulRgt", 0)
+                        current_coins = r_ist.get("coins", current_coins + rew_rgt)
+                        log("INVASION_WIN", f"🏆 CHIẾN THẮNG XÂM LƯỢC ẢI {seviye}! {Fore.GREEN}+{rew_rgt:,} RGT Coins{Style.RESET_ALL} (Đã mở khóa Ải {seviye + 1})", Fore.GREEN)
+                    else:
+                        log("INVASION", f"Trận xâm lược ải {seviye} chưa thành công.", Fore.LIGHTBLACK_EX)
+                else:
+                    log("INVASION_INFO", f"⚔️ Xâm lược ải {seviye} ({tur_name}): Lực chiến {oyuncu_gucu}/{dusman_gucu} (Cần thêm lính để thắng chắc 100%)", Fore.LIGHTBLACK_EX)
+
+            # 3C. Tự động huấn luyện lính gia tăng lực chiến
+            durum = r_pvp.get("durum", {})
+            kuyruklar = durum.get("kuyruklar", {})
+            if not kuyruklar and current_coins > 10000:
+                t_type = "piyade" if (seviye % 2 == 1) else "nisanci"
+                t_name = "Bộ binh (Piyade)" if t_type == "piyade" else "Xạ thủ (Nişancı)"
+                payload = {"tur": t_type, "tier": 1, "adet": 5, "komutId": str(uuid.uuid4())}
+                r_tr = requests.post(f"{API_BASE}/pvp/egitim/baslat", headers=headers, json=payload, timeout=8).json()
+                if r_tr.get("ok"):
+                    log("TRAIN", f"🛡️ Đang huấn luyện 5 {t_name} gia tăng lực chiến!", Fore.MAGENTA)
     except Exception:
         pass
 
