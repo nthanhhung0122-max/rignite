@@ -5,10 +5,11 @@
  - Tự động lấy x-init-data tươi mới qua Telethon Session (Không cần thủ công)
  - TÍNH NĂNG MỚI ĐỘT PHÁ:
    1. ĐÀO SIÊU TỐC QUÉT SẠCH NĂNG LƯỢNG (Count = 600):
-      - 1 phát tap quét sạch 6,000 Energy trong đúng 1 giây!
-   2. HỒI PHỤC NĂNG LƯỢNG CỰC NHANH (KHÔNG NGHỈ 10S):
-      - Ngay khi cạn năng lượng, tự động xem QC hồi đầy 100% (6,000 Energy).
-      - Không có thời gian chết nhân tạo, chạy liên tục với tốc độ tối đa!
+      - 1 phát tap quét sạch toàn bộ năng lượng vừa hồi (600 - 6,000 Energy) trong 0.5s!
+   2. HỒI PHỤC NĂNG LƯỢNG TỰ ĐỘNG THEO TỶ LỆ GAME (adEnergyRatio):
+      - 30 lượt đầu ngày hồi 100% (+6,000 Energy).
+      - Từ lượt 31 trở đi (hôm nay đã cày 488 lượt), game chuyển sang chế độ +10% (+600 Energy).
+      - Bot tự động bắt nhịp: Hồi +600 Energy ➔ Tap 600 quét sạch trong 0.5s ➔ Hồi tiếp không nghỉ 10s!
    3. AUTO MINIGAME ĐẬP KIM CƯƠNG JACKPOT 10X (5/5 Lượt Perfect mỗi ngày):
       - Tự động gửi lệnh đạt điểm cao nhất "perfect" ăn trọn coins và săn Jackpot!
    4. AUTO ĐẤU TRƯỜNG PVP ARENA (5 Lượt đánh thắng 100% mỗi ngày):
@@ -211,7 +212,7 @@ def execute_ad_view(headers, ad_type, label):
     """
     Quy trình chuẩn xem và xác thực QC Warhold trên Rignite:
     1. Gửi /ad/intent {type: ad_type}
-    2. Chờ đúng 9.15s (thời lượng video Warhold bắt buộc)
+    2. Chờ đúng 9.15s (thời lượng video Warhold bắt buộc của hệ thống)
     3. Gửi /ad/complete xác thực
     """
     try:
@@ -247,26 +248,29 @@ def execute_ad_view(headers, ad_type, label):
 
 def try_refill_energy_ad(headers):
     """
-    Hồi 100% Năng Lượng (6,000 Energy) tức thì:
-    - Kiểm tra lượt Free Boost trước.
-    - Xem QC Warhold (chuẩn 9.15s) hồi 100% Energy.
+    Hồi Năng Lượng theo tỷ lệ quy định của Rignite:
+    - 30 lượt đầu ngày: Hồi 100% (+6,000 Energy)
+    - Từ lượt 31 trở đi (adEnergyDamped): Tỷ lệ hồi còn 10% (+600 Energy)
+    - Bot tự động cập nhật và hồi năng lượng liên tục không ngừng nghỉ.
     """
     try:
         r_boost = requests.post(f"{API_BASE}/boost/full-energy", headers=headers, json={}, timeout=8)
         if r_boost.status_code == 200 and r_boost.json().get("energy"):
             d = r_boost.json()
-            return True, d.get("energy", 6000), d.get("coins", 0), "Free Boost"
+            return True, d.get("energy", 6000), d.get("coins", 0), 1.0, "Free Boost (100%)"
     except Exception:
         pass
 
-    ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi 100% Năng Lượng")
+    ok, cd, res = execute_ad_view(headers, "full_energy", "Hồi Năng Lượng")
     if ok and isinstance(res, dict):
-        new_energy = res.get("energy", 6000)
+        new_energy = res.get("energy", 600)
         new_coins = res.get("coins", 0)
         today = res.get("adEnergyToday", 0)
-        return True, new_energy, new_coins, f"Lượt thứ {today}"
+        ratio = res.get("adEnergyRatio", 0.1)
+        pct = int(ratio * 100)
+        return True, new_energy, new_coins, ratio, f"Lượt #{today} (+{pct}%)"
 
-    return False, cd, 0, str(res)
+    return False, cd, 0, 0, str(res)
 
 def try_watch_coins_ad(headers, current_coins):
     """Xem QC nhận +10,000 Coins & sạc 2% pin (60 lượt/ngày)"""
@@ -290,8 +294,9 @@ def start_continuous_mining():
   ⚡ TOOL AUTO RIGNITE MINING - CHẾ ĐỘ SIÊU TỐC NON-STOP 24/7 🚀
   - Tài khoản: {Fore.YELLOW}{ACCOUNT_NAME}{Style.RESET_ALL}
   - Tự động lấy x-init-data tươi mới qua Telethon
-  - Quét sạch năng lượng: Tap 600 phát một lượt (xóa sổ thanh 6000 Energy trong 1s)
-  - Hồi phục năng lượng thần tốc: Xem QC Warhold chuẩn 9.15s, KHÔNG NGHỈ 10s
+  - Quét sạch năng lượng: Tap 600 phát một lượt (húp trọn toàn bộ Energy chỉ trong 0.5s)
+  - Hồi phục năng lượng: Theo tỷ lệ game (30 lượt đầu +100%, sau đó +10% ~ 600 Energy)
+  - Hoàn toàn KHÔNG NGHỈ 10s: Vừa cạn là xem QC hồi tiếp ngay lập tức
   - Auto Minigame Perfect 5/5 lượt săn Kim Cương & Jackpot 10x
   - Auto PVP Arena 5/5 lượt thắng 100% (+1K RGT & Leo Rank)
   - Auto Spark Boost (+15% sản lượng đào)
@@ -308,9 +313,12 @@ def start_continuous_mining():
     energy = u.get("energy", 0)
     max_energy = u.get("maxEnergy", 6000)
     profit_per_hr = u.get("profitPerHour", 0)
+    ratio = u.get("adEnergyRatio", 0.1)
+    today_ads = u.get("adEnergyToday", 0)
 
     log("PROFILE", f"Đăng nhập thành công: {Fore.YELLOW}@{u.get('username') or u.get('telegramId')}{Style.RESET_ALL} (Level {u.get('level')})", Fore.GREEN)
     log("WALLET", f"Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL} | Tốc độ đào: {Fore.CYAN}{profit_per_hr:,}/h{Style.RESET_ALL} | Năng lượng: {energy}/{max_energy}")
+    log("RATIO_INFO", f"Tỷ lệ hồi QC hiện tại: {Fore.YELLOW}+{int(ratio*100)}%{Style.RESET_ALL} (Đã dùng {today_ads} lượt hôm nay)", Fore.CYAN)
 
     time.sleep(1)
 
@@ -343,10 +351,12 @@ def start_continuous_mining():
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # C. QUÉT SẠCH NĂNG LƯỢNG SIÊU TỐC: Tap 600 (xóa sổ thanh năng lượng tức thì)
-            if energy >= 10:
-                # Gửi tap 600 để tiêu thụ tối đa lên tới 6,000 Energy trong 1 lượt request!
-                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": 600}, timeout=10).json()
+            # C. ĐÀO SIÊU TỐC MÔ PHỎNG TAP 2 NÚT XEN KẼ KÍCH HOẠT OVERDRIVE (x3 VÀNG):
+            # Nhịp tap xen kẽ liên tiếp (mỗi nhịp 25 - 30 taps cách nhau 0.12s)
+            # Nhịp 1-2 đẩy combo lên x1.5, từ nhịp 3 trở đi bùng nổ OVERDRIVE (od = True, tapMult = 3.0) ăn gấp 3 lần vàng!
+            while energy >= 10:
+                chunk = min(30, max(1, energy // 10))
+                r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": chunk}, timeout=10).json()
 
                 if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION", "SESSION_TAKEN"]:
                     log("REAUTH", "Session hết hạn hoặc mở trên đt, đang tự động kết nối lại lấy session mới...", Fore.YELLOW)
@@ -354,27 +364,34 @@ def start_continuous_mining():
                     new_headers, new_auth = perform_login()
                     if new_headers:
                         headers = new_headers
-                    continue
+                    break
 
                 accepted = r_tap.get("accepted", 0)
+                if accepted <= 0:
+                    break
+
                 coins = r_tap.get("coins", coins)
                 energy = r_tap.get("energy", 0)
                 used_energy = accepted * 10
-                log("TAP_FAST", f"⚡ QUÉT SIÊU TỐC: -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
-                time.sleep(0.5)
+                mult = r_tap.get("tapMult", 1)
+                is_od = r_tap.get("od", False)
+                od_tag = f" {Fore.RED}🔥 [OVERDRIVE x3 VÀNG!]{Style.RESET_ALL}" if is_od else f" (x{mult})"
+
+                log("TAP_COMBO", f"⚡ TAP 2 NÚT:{od_tag} -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
+                time.sleep(0.12)
 
             # D. HỒI PHỤC NĂNG LƯỢNG NGAY LẬP TỨC (KHÔNG NGHỈ 10S)
             if energy < 10:
-                log("ENERGY", f"Năng lượng còn {energy}. Bấm ngay nút [📺 +%100] hồi 6,000 Energy không chờ...", Fore.CYAN)
-                ok, cd_or_energy, new_coins, info = try_refill_energy_ad(headers)
+                log("ENERGY", f"Năng lượng còn {energy}. Bấm ngay nút [📺] hồi phục năng lượng không chờ...", Fore.CYAN)
+                ok, cd_or_energy, new_coins, new_ratio, info = try_refill_energy_ad(headers)
 
                 if ok:
                     energy = cd_or_energy
                     coins = new_coins if new_coins > 0 else coins
-                    log("REFILL_OK", f"⚡ HỒI PHỤC THẦN TỐC! Đầy {energy}/{max_energy} Energy ({info}). Tiếp tục quét sạch 600 taps ngay!", Fore.GREEN)
+                    log("REFILL_OK", f"⚡ HỒI PHỤC THẦN TỐC! Nhận {energy}/{max_energy} Energy ({info}). Tiếp tục quét sạch 600 taps ngay!", Fore.GREEN)
                     continue
                 else:
-                    # Nếu server có cooldown thực tế (thường 2-3s), chỉ đợi đúng số giây đó rồi quất tiếp!
+                    # Nếu server có cooldown thực tế (thường 1-2s), chỉ đợi đúng số giây đó rồi quất tiếp!
                     wait_time = max(1, int(cd_or_energy)) if isinstance(cd_or_energy, (int, float)) and cd_or_energy > 0 else 2
                     log("CD_FAST", f"Server hồi chiêu QC {wait_time}s, sẵn sàng quất tiếp ngay lập tức...", Fore.YELLOW)
                     time.sleep(wait_time)
