@@ -312,13 +312,13 @@ def execute_ad_view(headers, ad_type, label):
             cd = d_intent.get("cooldown", 3)
             return False, cd, d_intent.get("error", "Cooldown hoặc hết lượt")
 
-        log("AD", f"📺 Đang xem QC {label} (9.25s)...", Fore.CYAN)
-        time.sleep(9.25)
+        log("AD", f"📺 Đang xem QC {label} (8.15s - Tối ưu siêu tốc)...", Fore.CYAN)
+        time.sleep(8.15)
 
         payload = {
             "network": "warhold",
             "ymid": None,
-            "ms": 9250,
+            "ms": 8150,
             "tapGap": -1,
             "adexiumTask": None,
             "adexiumWid": None
@@ -438,13 +438,12 @@ def start_continuous_mining():
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # C. HỒI PHỤC NĂNG LƯỢNG TÍCH LŨY (XEM ĐỦ 8 LẦN QC RỒI MỚI ẤN TAP ĐÀO):
-            # - Khi năng lượng cạn (<10) hoặc lúc bắt đầu chưa đủ cao (<80%):
-            # - Nếu tỷ lệ hồi là 10% (ratio <= 0.2): Xem liên tục 8 lần QC tích ~80% - 100% cây năng lượng (>5,200 Energy)!
-            # - Tích đầy cây năng lượng giúp khi tap sẽ bùng nổ và DUY TRÌ LIÊN TỤC combo OVERDRIVE x3 VÀNG dài nhất!
-            if energy < 10 or (ratio <= 0.2 and energy < max_energy * 0.8):
-                target_views = 8 if ratio <= 0.2 else 1
-                log("ENERGY", f"🔋 Năng lượng hiện tại {energy}/{max_energy} (Hồi {int(ratio*100)}%/lượt). Bắt đầu xem {target_views} lần QC tích lũy rồi mới ấn tap...", Fore.CYAN)
+            # C. HỒI PHỤC NĂNG LƯỢNG SIÊU TỐC TỰ ĐỘNG (XEM 1 LƯỢT QC -> TAP 600 NGAY):
+            # - Tối ưu thời gian: Hồi phục +650 Energy trong 8.15s, lập tức tap 600 phát trong 0.5s
+            # - Loại bỏ hoàn toàn thời gian chết (không cần tích lũy 8 lượt QC 85s như trước)
+            if energy < 50:
+                target_views = 1
+                log("ENERGY", f"🔋 Năng lượng thấp ({energy}/{max_energy}). Xem 1 QC siêu tốc (8.15s) hồi phục để tap ngay...", Fore.CYAN)
 
                 success_count = 0
                 max_attempts = target_views * 3
