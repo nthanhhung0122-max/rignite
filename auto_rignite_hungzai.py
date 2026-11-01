@@ -129,6 +129,20 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
+    # 1B. THU HOẠCH 8 CỤM NHÀ MÁY ĐIỆN THUỘC ĐỊA (/santral/topla)
+    try:
+        total_santral = 0
+        for no in range(8):
+            r_st = requests.post(f"{API_BASE}/santral/topla", headers=headers, json={"no": no}, timeout=4)
+            if r_st.status_code == 200:
+                d_st = r_st.json()
+                total_santral += d_st.get("alinan", 0)
+        if total_santral > 0:
+            current_coins += total_santral
+            log("SANTRAL", f"⚡ Thu hoạch 8 cụm nhà máy điện thuộc địa: {Fore.GREEN}+{total_santral:,} Coins/Năng lượng{Style.RESET_ALL}", Fore.CYAN)
+    except Exception:
+        pass
+
     # 2. AUTO MINIGAME ĐẬP KIM CƯƠNG PERFECT 5/5 LƯỢT MỖI NGÀY
     try:
         for _ in range(5):
@@ -142,7 +156,7 @@ def check_side_activities(headers, current_coins):
     except Exception:
         pass
 
-    # 3. AUTO PVP ARENA + CHIẾN DỊCH XÂM LƯỢC (İSTİLA / INVASION) + HUẤN LUYỆN LÍNH
+    # 3. AUTO PVP ARENA + CHIẾN DỊCH XÂM LƯỢC (İSTİLA) + NÂNG TƯỜNG THÀNH VỪA ĐỦ ĐỂ THẮNG
     try:
         r_pvp = requests.post(f"{API_BASE}/pvp/durum", headers=headers, json={}, timeout=8).json()
         if r_pvp.get("ok"):
@@ -166,17 +180,27 @@ def check_side_activities(headers, current_coins):
                             log("ARENA_WIN", f"⚔️ THẮNG ĐẤU TRƯỜNG vs {opp.get('ad')}! {Fore.GREEN}+{savas.get('odulRgt')} RGT Coins{Style.RESET_ALL} (+{savas.get('puanDegisimi')} Điểm Rank | Rank: {savas.get('yeniPuan')})", Fore.GREEN)
                         break
 
-            # 3B. Chiến dịch XÂM LƯỢC (İSTİLA / INVASION - 3 Lượt mỗi ngày)
+            # 3B. Chiến dịch XÂM LƯỢC (İSTİLA / INVASION)
             istila = r_pvp.get("istila", {})
             kalan_hak = istila.get("kalanHak", 0)
             seviye = istila.get("seviye", 1)
-            dusman_gucu = istila.get("gosterilenDusmanGucu", 6000)
+            dusman_gucu = istila.get("gosterilenDusmanGucu", 2300)
             is_completed = istila.get("tamamlandi", False)
 
             if not is_completed and kalan_hak > 0:
-                tur = "saldiri" if (seviye % 2 == 1) else "savunma"
-                tur_name = "Tấn công Tiền đồn" if tur == "saldiri" else "Phòng thủ Thuộc địa"
-                oyuncu_gucu = my_atk if tur == "saldiri" else my_def
+                is_attack = (seviye % 2 == 1)
+                tur_name = "Tấn công Tiền đồn" if is_attack else "Phòng thủ Thuộc địa"
+                oyuncu_gucu = my_atk if is_attack else my_def
+
+                # NẾU LÀ ẢI PHÒNG THỦ VÀ THIẾU THỦ: NÂNG TƯỜNG THÀNH VỪA ĐỦ ĐỂ THẮNG
+                if not is_attack and my_def < dusman_gucu:
+                    if current_coins >= 100000:
+                        r_wall = requests.post(f"{API_BASE}/koloni/sur/al", headers=headers, json={"tur": "duvar", "kademe": "ahsap", "adet": 1}, timeout=8).json()
+                        if r_wall.get("ok"):
+                            my_def += 100
+                            oyuncu_gucu = my_def
+                            current_coins = max(0, current_coins - r_wall.get("harcanan", 100000))
+                            log("WALL_BUILD", f"🧱 Nâng thêm 1 Tường gỗ (Phòng thủ: {my_def}/{dusman_gucu}) vừa đủ để chuẩn bị thắng ải xâm lược!", Fore.YELLOW)
 
                 if oyuncu_gucu >= dusman_gucu:
                     log("INVASION", f"🏴‍☠️ XUẤT KÍCH XÂM LƯỢC Ải {seviye} ({tur_name}): Ta {oyuncu_gucu} vs Địch {dusman_gucu}...", Fore.YELLOW)
@@ -196,20 +220,37 @@ def check_side_activities(headers, current_coins):
                     else:
                         log("INVASION", f"Trận xâm lược ải {seviye} chưa thành công.", Fore.LIGHTBLACK_EX)
                 else:
-                    log("INVASION_INFO", f"⚔️ Xâm lược ải {seviye} ({tur_name}): Lực chiến {oyuncu_gucu}/{dusman_gucu} (Cần thêm lính để thắng chắc 100%)", Fore.LIGHTBLACK_EX)
+                    log("INVASION_INFO", f"⚔️ Xâm lược ải {seviye} ({tur_name}): Lực chiến {oyuncu_gucu}/{dusman_gucu} (Đang tích lũy để thắng chắc 100%)", Fore.LIGHTBLACK_EX)
 
-            # 3C. Tự động huấn luyện lính gia tăng lực chiến
+            # 3C. Tự động huấn luyện lính gia tăng lực tấn công
             durum = r_pvp.get("durum", {})
             kuyruklar = durum.get("kuyruklar", {})
-            if not kuyruklar and current_coins > 10000:
-                t_type = "piyade" if (seviye % 2 == 1) else "nisanci"
-                t_name = "Bộ binh (Piyade)" if t_type == "piyade" else "Xạ thủ (Nişancı)"
-                payload = {"tur": t_type, "tier": 1, "adet": 5, "komutId": str(uuid.uuid4())}
+            if not kuyruklar and current_coins > 20000:
+                payload = {"tur": "piyade", "tier": 1, "adet": 5, "komutId": str(uuid.uuid4())}
                 r_tr = requests.post(f"{API_BASE}/pvp/egitim/baslat", headers=headers, json=payload, timeout=8).json()
                 if r_tr.get("ok"):
-                    log("TRAIN", f"🛡️ Đang huấn luyện 5 {t_name} gia tăng lực chiến!", Fore.MAGENTA)
+                    log("TRAIN", f"🛡️ Đang huấn luyện 5 Bộ binh gia tăng lực tấn công!", Fore.MAGENTA)
     except Exception:
         pass
+
+    # 4. IDEA 2: AUTO NÂNG CẤP CÔNG TRÌNH THUỘC ĐỊA & MỎ TĂNG PROFIT/HOUR
+    if current_coins > 25000:
+        upgrade_items = [
+            "tools_1", "tools_2", "tools_3", "tools_4", "tools_5", "tools_6", "tools_7", "tools_8",
+            "energy_1", "energy_2", "energy_3", "energy_4", "energy_5", "energy_6", "energy_7", "energy_8",
+            "workers_1", "workers_2", "workers_3", "workers_4", "workers_5", "workers_6", "workers_7", "workers_8",
+            "land_1", "land_2", "land_3", "land_4"
+        ]
+        for item_id in upgrade_items:
+            try:
+                r_buy = requests.post(f"{API_BASE}/items/buy", headers=headers, json={"itemId": item_id}, timeout=5).json()
+                if r_buy.get("profitPerHour"):
+                    new_pph = r_buy.get("profitPerHour")
+                    current_coins = r_buy.get("coins", current_coins)
+                    log("MINE_UPGRADE", f"🏗️ Nâng cấp công trình [{item_id}] thành công! Tốc độ đào mới: {Fore.CYAN}{new_pph:,}/h{Style.RESET_ALL} (Số dư: {current_coins:,})", Fore.GREEN)
+                    break
+            except Exception:
+                pass
 
     # 4. AUTO SPARK BOOST RANDOM (+15% TỐC ĐỘ ĐÀO)
     try:
@@ -268,16 +309,16 @@ def execute_ad_view(headers, ad_type, label):
 
         d_intent = r_intent.json()
         if not d_intent.get("ok"):
-            cd = d_intent.get("cooldown", 0)
+            cd = d_intent.get("cooldown", 3)
             return False, cd, d_intent.get("error", "Cooldown hoặc hết lượt")
 
-        log("AD", f"📺 Đang xem QC {label} (9.15s)...", Fore.CYAN)
-        time.sleep(9.15)
+        log("AD", f"📺 Đang xem QC {label} (9.25s)...", Fore.CYAN)
+        time.sleep(9.25)
 
         payload = {
             "network": "warhold",
             "ymid": None,
-            "ms": 9150,
+            "ms": 9250,
             "tapGap": -1,
             "adexiumTask": None,
             "adexiumWid": None
@@ -397,7 +438,44 @@ def start_continuous_mining():
                 coins = check_side_activities(headers, coins)
                 last_side_check = time.time()
 
-            # C. ĐÀO SIÊU TỐC MÔ PHỎNG TAP 2 NÚT XEN KẼ KÍCH HOẠT OVERDRIVE (x3 VÀNG):
+            # C. HỒI PHỤC NĂNG LƯỢNG TÍCH LŨY (XEM ĐỦ 8 LẦN QC RỒI MỚI ẤN TAP ĐÀO):
+            # - Khi năng lượng cạn (<10) hoặc lúc bắt đầu chưa đủ cao (<80%):
+            # - Nếu tỷ lệ hồi là 10% (ratio <= 0.2): Xem liên tục 8 lần QC tích ~80% - 100% cây năng lượng (>5,200 Energy)!
+            # - Tích đầy cây năng lượng giúp khi tap sẽ bùng nổ và DUY TRÌ LIÊN TỤC combo OVERDRIVE x3 VÀNG dài nhất!
+            if energy < 10 or (ratio <= 0.2 and energy < max_energy * 0.8):
+                target_views = 8 if ratio <= 0.2 else 1
+                log("ENERGY", f"🔋 Năng lượng hiện tại {energy}/{max_energy} (Hồi {int(ratio*100)}%/lượt). Bắt đầu xem {target_views} lần QC tích lũy rồi mới ấn tap...", Fore.CYAN)
+
+                success_count = 0
+                max_attempts = target_views * 3
+                attempts = 0
+
+                while success_count < target_views and attempts < max_attempts and energy < max_energy * 0.95:
+                    attempts += 1
+                    ad_idx = success_count + 1
+                    log("AD_REFILL", f"📺 [Lượt QC {ad_idx}/{target_views}] Đang xem QC hồi năng lượng... (Đã có: {energy}/{max_energy})", Fore.CYAN)
+                    ok, cd_or_energy, new_coins, new_ratio, info = try_refill_energy_ad(headers)
+                    if ok:
+                        success_count += 1
+                        energy = cd_or_energy
+                        coins = new_coins if new_coins > 0 else coins
+                        ratio = new_ratio
+                        log("REFILL_STEP", f"⚡ Xong lượt QC {ad_idx}/{target_views}! Năng lượng hiện có: {Fore.GREEN}{energy}/{max_energy}{Style.RESET_ALL} ({info})", Fore.GREEN)
+
+                        if energy >= max_energy * 0.95:
+                            log("REFILL_MAX", f"🔋 Năng lượng đã đạt tối đa ({energy}/{max_energy})!", Fore.GREEN)
+                            break
+
+                        if success_count < target_views:
+                            time.sleep(3.2)
+                    else:
+                        wait_sec = max(2, int(cd_or_energy)) if isinstance(cd_or_energy, (int, float)) and cd_or_energy > 0 else 3
+                        log("CD_WAIT", f"Server hồi chiêu QC ({wait_sec}s), đợi {wait_sec}s rồi tiếp tục...", Fore.YELLOW)
+                        time.sleep(wait_sec)
+
+                log("REFILL_READY", f"🔥 ĐÃ TÍCH ĐỦ NĂNG LƯỢNG ({energy}/{max_energy})! BẮT ĐẦU ẤN TAP XẢ OVERDRIVE x3 VÀNG LIÊN TIẾP! 🚀", Fore.MAGENTA)
+
+            # D. ĐÀO SIÊU TỐC MÔ PHỎNG TAP 2 NÚT XEN KẼ KÍCH HOẠT OVERDRIVE (x3 VÀNG):
             # Nhịp tap xen kẽ liên tiếp (mỗi nhịp 25 - 30 taps cách nhau 0.12s)
             # Nhịp 1-2 đẩy combo lên x1.5, từ nhịp 3 trở đi bùng nổ OVERDRIVE (od = True, tapMult = 3.0) ăn gấp 3 lần vàng!
             while energy >= 10:
@@ -425,29 +503,6 @@ def start_continuous_mining():
 
                 log("TAP_COMBO", f"⚡ TAP 2 NÚT:{od_tag} -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
                 time.sleep(0.12)
-
-            # D. HỒI PHỤC NĂNG LƯỢNG NGAY LẬP TỨC (KHÔNG NGHỈ 10S)
-            if energy < 10:
-                log("ENERGY", f"Năng lượng còn {energy}. Bấm ngay nút [📺] hồi phục năng lượng không chờ...", Fore.CYAN)
-                ok, cd_or_energy, new_coins, new_ratio, info = try_refill_energy_ad(headers)
-
-                if ok:
-                    energy = cd_or_energy
-                    coins = new_coins if new_coins > 0 else coins
-                    log("REFILL_OK", f"⚡ HỒI PHỤC THẦN TỐC! Nhận {energy}/{max_energy} Energy ({info}). Tiếp tục quét sạch 600 taps ngay!", Fore.GREEN)
-                    continue
-                else:
-                    # Nếu server có cooldown thực tế (thường 1-2s), chỉ đợi đúng số giây đó rồi quất tiếp!
-                    wait_time = max(1, int(cd_or_energy)) if isinstance(cd_or_energy, (int, float)) and cd_or_energy > 0 else 2
-                    log("CD_FAST", f"Server hồi chiêu QC {wait_time}s, sẵn sàng quất tiếp ngay lập tức...", Fore.YELLOW)
-                    time.sleep(wait_time)
-
-                    # Lấy lại trạng thái energy thực tế
-                    r_me = requests.post(f"{API_BASE}/me", headers=headers, json={}, timeout=8)
-                    if r_me.status_code == 200:
-                        d_me = r_me.json()
-                        energy = d_me.get("energy", energy)
-                        coins = d_me.get("coins", coins)
 
         except Exception as e:
             log("WARN", f"Lỗi tạm thời: {e}. Tiếp tục ngay sau 2s...", Fore.YELLOW)
