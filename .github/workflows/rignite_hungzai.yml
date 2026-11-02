@@ -3,7 +3,11 @@ name: Auto Rignite Hungzai 24/7
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */5 * * *'
+
+concurrency:
+  group: rignite-hungzai-run
+  cancel-in-progress: true
 
 jobs:
   run-rignite-hungzai:
@@ -29,5 +33,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
           TELEGRAM_STRING_SESSION_ACC1: ${{ secrets.TELEGRAM_STRING_SESSION_ACC1 }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          MAX_RUNTIME_SECONDS: '17500'
         run: |
           python auto_rignite_hungzai.py
