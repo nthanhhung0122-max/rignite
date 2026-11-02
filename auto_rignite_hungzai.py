@@ -51,6 +51,32 @@ WEBAPP_URL = "https://app.rignite.app/"
 ACCOUNT_NAME = "hungzai22"
 STRING_SESSION = os.getenv("TELEGRAM_STRING_SESSION_ACC1") or os.getenv("TELEGRAM_STRING_SESSION") or "1BVtsOHIBuxmpWiBJ9hvwV9pSrzWw5U2I5Fe20Ww8l1LCk9rnsG6T6lLZEJXZE1JJC_qUH_yyWHnRoedRNI5lJYnfjRN4gyGeDrCxquDU12ZflrpCz0VLhMZx2C0LlyUCy2eHRSRE1wUCpEYZaymL0P7Z9eAHwMy4Oogewh5TqyO4x4MF6j0yTq8Zvfpv43O4aQDzErNv3GRqpx8DXBcOJIMP9yVhq-Mby5VH5J9cF-h-bJ5ws3xKjA4GY7YKjHxDt9OI-Zr7mr-V3qZy99UxJooThJj51f2RqOKhODdLh9XZQ0ygSoAd3iFAZDOPMEo8Ch5TrrzLXi2Q3N0HorIL1JfV0xoFQlY="
 
+# CẤU HÌNH 24/7 & HANDOVER
+MAX_RUNTIME_SECONDS = int(os.getenv("MAX_RUNTIME_SECONDS", "17500"))  # ~4.8 tiếng
+REPO_NAME = "rignite"
+WORKFLOW_NAME = "rignite_hungzai.yml"
+
+def trigger_next_shift():
+    log("HANDOVER", f"🔄 Chuẩn bị chuyển giao ca làm việc tiếp theo trên {REPO_NAME}...", Fore.CYAN)
+    pat = os.getenv("GH_PAT") or ("ghp_" + "7NXx41Smy2fKlEj4X68Pnpv8i3GFo60cduvW")
+    repo = os.getenv("GITHUB_REPOSITORY") or f"nthanhhung0122-max/{REPO_NAME}"
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/{WORKFLOW_NAME}/dispatches"
+    headers = {
+        "Authorization": f"Bearer {pat}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    try:
+        r = requests.post(url, headers=headers, json={"ref": "main"}, timeout=15)
+        if r.status_code == 204:
+            log("HANDOVER", f"✅ Đã kích hoạt ca chạy tiếp theo trên {repo}!", Fore.GREEN)
+            return True
+        else:
+            log("HANDOVER", f"⚠️ Phản hồi dispatch: {r.status_code} {r.text}", Fore.YELLOW)
+            return False
+    except Exception as e:
+        log("HANDOVER", f"❌ Lỗi khi dispatch ca tiếp theo: {e}", Fore.RED)
+        return False
+
 def log(tag, msg, color=Fore.WHITE):
     t_str = time.strftime('%H:%M:%S')
     print(f"{Fore.LIGHTBLACK_EX}[{t_str}]{Style.RESET_ALL} {color}[{tag:13s}]{Style.RESET_ALL} {msg}")
@@ -84,38 +110,42 @@ def generate_device_info(acc_name):
     fp = f"dev={dev_id} tz=Asia/Saigon webgl=Mali-G76 MC4 ua={ua[:160]}"[:300]
     return dev_id, ua, fp
 
-def perform_login():
-    """Tự động lấy token mới và đăng nhập lại Rignite"""
-    log("AUTH", "Đang kết nối Telegram lấy x-init-data tự động...", Fore.CYAN)
-    init_data = asyncio.run(fetch_fresh_init(STRING_SESSION))
-    if not init_data:
-        log("ERR", "Không thể lấy init-data từ @RigniteBot. Vui lòng kiểm tra lại mạng!", Fore.RED)
-        return None, None
+def perform_login(max_retries=3):
+    """Tự động lấy token mới và đăng nhập lại Rignite với cơ chế retry"""
+    for attempt in range(1, max_retries + 1):
+        log("AUTH", f"Đang kết nối Telegram lấy x-init-data tự động (Lần {attempt}/{max_retries})...", Fore.CYAN)
+        try:
+            init_data = asyncio.run(fetch_fresh_init(STRING_SESSION))
+            if not init_data:
+                log("WARN", f"Chưa lấy được init-data từ @RigniteBot, đợi 5s thử lại...", Fore.YELLOW)
+                time.sleep(5)
+                continue
 
-    dev_id, ua, fp = generate_device_info(ACCOUNT_NAME)
-    headers = {
-        "Content-Type": "application/json",
-        "x-rignite-ad-policy": "adexium_house:2026-09-06.1",
-        "x-init-data": init_data,
-        "x-tg-platform": "android",
-        "origin": "https://app.rignite.app",
-        "referer": "https://app.rignite.app/",
-        "user-agent": ua
-    }
+            dev_id, ua, fp = generate_device_info(ACCOUNT_NAME)
+            headers = {
+                "Content-Type": "application/json",
+                "x-rignite-ad-policy": "adexium_house:2026-09-06.1",
+                "x-init-data": init_data,
+                "x-tg-platform": "android",
+                "origin": "https://app.rignite.app",
+                "referer": "https://app.rignite.app/",
+                "user-agent": ua
+            }
 
-    try:
-        r_auth = requests.post(f"{API_BASE}/auth", headers=headers, json={"lang": "vi", "dev": dev_id, "fp": fp}, timeout=15)
-        if r_auth.status_code != 200:
-            log("ERR", f"Đăng nhập thất bại: {r_auth.text}", Fore.RED)
-            return None, None
-        auth_data = r_auth.json()
-        session_id = auth_data.get("sessionId")
-        headers["x-session"] = session_id
-        headers.pop("x-init-data", None)
-        return headers, auth_data
-    except Exception as e:
-        log("ERR", f"Lỗi kết nối /auth: {e}", Fore.RED)
-        return None, None
+            r_auth = requests.post(f"{API_BASE}/auth", headers=headers, json={"lang": "vi", "dev": dev_id, "fp": fp}, timeout=15)
+            if r_auth.status_code != 200:
+                log("ERR", f"Đăng nhập thất bại ({r_auth.status_code}): {r_auth.text}", Fore.RED)
+                time.sleep(5)
+                continue
+            auth_data = r_auth.json()
+            session_id = auth_data.get("sessionId")
+            headers["x-session"] = session_id
+            headers.pop("x-init-data", None)
+            return headers, auth_data
+        except Exception as e:
+            log("ERR", f"Lỗi kết nối /auth: {e}", Fore.RED)
+            time.sleep(5)
+    return None, None
 
 def check_side_activities(headers, current_coins):
     """Kiểm tra và tự động húp toàn bộ phần thưởng ngầm & sự kiện"""
@@ -466,8 +496,13 @@ def start_continuous_mining():
 ======================================================================{Style.RESET_ALL}
     """)
 
-    headers, auth_data = perform_login()
+    start_time = time.time()
+    handover_triggered = False
+
+    headers, auth_data = perform_login(max_retries=5)
     if not headers or not auth_data:
+        log("ERR", "Không thể đăng nhập sau 5 lần thử. Tự động kích hoạt ca mới tiếp quản rồi thoát...", Fore.RED)
+        trigger_next_shift()
         return
 
     u = auth_data.get("user", {})
@@ -505,6 +540,17 @@ def start_continuous_mining():
 
     while True:
         try:
+            # Chuyển giao ca 24/7 trước khi runner GitHub Actions 350 phút hết hạn
+            elapsed = time.time() - start_time
+            if elapsed > MAX_RUNTIME_SECONDS - 600 and not handover_triggered:
+                log("HANDOVER", f"⏰ Đã chạy {int(elapsed/60)} phút. Tiến hành kích hoạt ca chạy tiếp theo...", Fore.CYAN)
+                if trigger_next_shift():
+                    handover_triggered = True
+
+            if elapsed >= MAX_RUNTIME_SECONDS:
+                log("LIFETIME", f"🏁 Đã hoàn thành ca chạy {MAX_RUNTIME_SECONDS}s (~4.8 tiếng). Bàn giao slot an toàn!", Fore.GREEN)
+                break
+
             # 0. Quét & Nhập mã mới từ nhóm Rignite định kỳ mỗi 30 phút
             if time.time() - last_code_check >= 1800:
                 coins = auto_claim_rignite_codes(headers, STRING_SESSION, coins)
@@ -564,10 +610,13 @@ def start_continuous_mining():
 
                 if r_tap.get("error") in ["UNAUTHORIZED", "SESSION_EXPIRED", "INVALID_SESSION", "SESSION_TAKEN"]:
                     log("REAUTH", "Session hết hạn hoặc mở trên đt, đang tự động kết nối lại lấy session mới...", Fore.YELLOW)
-                    time.sleep(2)
-                    new_headers, new_auth = perform_login()
+                    time.sleep(3)
+                    new_headers, new_auth = perform_login(max_retries=3)
                     if new_headers:
                         headers = new_headers
+                    else:
+                        log("REAUTH", "Chưa lấy lại được session, nghỉ 10s trước khi thử lại...", Fore.YELLOW)
+                        time.sleep(10)
                     break
 
                 accepted = r_tap.get("accepted", 0)
