@@ -1,0 +1,37 @@
+name: Auto Rignite - Acc 2 (gaylobucu)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3 */5 * * *'
+
+concurrency:
+  group: rignite-acc2
+  cancel-in-progress: true
+
+jobs:
+  run-rignite-acc2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests telethon colorama
+
+      - name: Chay Auto Rignite - Acc 2 (gaylobucu)
+        env:
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          WORKFLOW_NAME: "rignite_acc2.yml"
+        run: |
+          python auto_rignite.py --acc 2
