@@ -1,0 +1,36 @@
+name: Auto Rignite Mining 24/7 (Combo 3 Accs)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
+
+concurrency:
+  group: rignite-mining
+  cancel-in-progress: true
+
+jobs:
+  run-rignite-combo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests telethon colorama
+
+      - name: Chay Auto Rignite Combo 3 Accs 24/7
+        env:
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          python auto_rignite_combo.py
