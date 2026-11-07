@@ -3,16 +3,19 @@ name: Auto Rignite - Acc 3 (phanhoang)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '5 */5 * * *'
+    - cron: '6 */5 * * *'
 
 concurrency:
   group: rignite-acc3
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   run-rignite-acc3:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    permissions:
+      contents: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -33,5 +36,15 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
           WORKFLOW_NAME: "rignite_acc3.yml"
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           python auto_rignite.py --acc 3
+
+      - name: Tu dong ban giao ca tiep theo (Handover Chaining 24/7)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          echo "Kich hoat ca chay tiep theo cho Acc 3..."
+          sleep 10
+          gh workflow run rignite_acc3.yml --repo "${{ github.repository }}" || echo "Handover triggered."
