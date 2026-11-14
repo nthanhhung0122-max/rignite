@@ -408,13 +408,13 @@ def execute_ad_view(headers, ad_type, label):
             cd = d_intent.get("cooldown", 3)
             return False, cd, d_intent.get("error", "Cooldown hoặc hết lượt")
 
-        log("AD", f"📺 Đang xem QC {label} (8.15s - Tối ưu siêu tốc)...", Fore.CYAN)
-        time.sleep(8.15)
+        log("AD", f"📺 Đang xem QC {label} (9.0s Warhold chuẩn hóa)...", Fore.CYAN)
+        time.sleep(9.0)
 
         payload = {
             "network": "warhold",
             "ymid": None,
-            "ms": 8150,
+            "ms": 9000,
             "tapGap": -1,
             "adexiumTask": None,
             "adexiumWid": None
@@ -470,6 +470,25 @@ def try_watch_coins_ad(headers, current_coins):
 
     next_wait = max(cd, 20) if cd > 0 else 30
     return current_coins, next_wait
+
+def try_refill_battery_ad(headers, current_coins):
+    """
+    Xem QC ngay bên dưới bình Ắc Quy (type: battery) để sạc pin tức thì:
+    - Khi pin ắc quy dưới 95% hoặc cạn (0%), xem QC sạc đầy / hồi pin ngay lập tức
+    - Giữ năng suất khai thác thuộc địa luôn đạt 100% không bị sụt giảm
+    """
+    ok, cd, res = execute_ad_view(headers, "battery", "Sạc Ắc Quy Trực Tiếp Dưới Pin")
+    if ok and isinstance(res, dict):
+        new_coins = res.get("coins", current_coins)
+        batt_energy = res.get("batteryEnergy", 0)
+        batt_cap = res.get("batteryCap", 1)
+        ad_left = res.get("batteryAdLeft", 0)
+        batt_pct = int(batt_energy / batt_cap * 100) if batt_cap > 0 else 100
+        log("BATTERY_AD", f"🔋⚡ SẠC ẮC QUY QUA QC THÀNH CÔNG! Pin đã sạc lên: {Fore.GREEN}{batt_pct}% ({batt_energy:,}/{batt_cap:,}){Style.RESET_ALL} | Còn lại {ad_left} lượt QC pin hôm nay", Fore.GREEN)
+        return new_coins, 45, True
+
+    next_wait = max(cd, 20) if cd > 0 else 30
+    return current_coins, next_wait, False
 
 def start_continuous_mining():
     print(f"""
@@ -527,6 +546,7 @@ def start_continuous_mining():
     log("MINING_LOOP", "⚡ BẮT ĐẦU VÒNG LẶP ĐÀO SIÊU TỐC KHÔNG NGHỈ...", Fore.GREEN)
     last_side_check = time.time()
     last_ad_coin_check = 0
+    last_battery_ad_check = 0
     last_code_check = time.time()
 
     while True:
@@ -611,10 +631,15 @@ def start_continuous_mining():
                 log("TAP_COMBO", f"⚡ TAP 2 NÚT:{od_tag} -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
                 time.sleep(0.12)
 
-            # BƯỚC 2: SAU KHI TAP XONG -> KIỂM TRA & XEM QC PIN (SẠC PIN & COINS) ĐỊNH KỲ 45s
-            if time.time() - last_ad_coin_check >= 45:
+            # BƯỚC 2: SAU KHI TAP XONG -> XEM QC TRỰC TIẾP DƯỚI BÌNH ẮC QUY ĐỂ SẠC PIN (KHÔNG ĐỢI PIN CẠN)
+            if time.time() - last_battery_ad_check >= 45:
+                coins, next_cd, ok_batt = try_refill_battery_ad(headers, coins)
+                last_battery_ad_check = time.time() - max(0, 45 - next_cd)
+
+            # BƯỚC 2B: XEM QC NHẬN COINS & TĂNG THÊM PIN PHỤ TRỢ (60 lượt/ngày)
+            if time.time() - last_ad_coin_check >= 50:
                 coins, next_cd = try_watch_coins_ad(headers, coins)
-                last_ad_coin_check = time.time() - max(0, 45 - next_cd)
+                last_ad_coin_check = time.time() - max(0, 50 - next_cd)
 
             # BƯỚC 3: KIỂM TRA SỰ KIỆN PHỤ (Minigame, PVP Arena, Spark, Thuộc địa - KHÔNG CHECK XÂM LƯỢC) MỖI 90s
             if time.time() - last_side_check >= 90:
