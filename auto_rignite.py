@@ -243,48 +243,7 @@ def check_side_activities(headers, current_coins):
                             log("ARENA_WIN", f"⚔️ THẮNG ĐẤU TRƯỜNG vs {opp.get('ad')}! {Fore.GREEN}+{savas.get('odulRgt')} RGT Coins{Style.RESET_ALL} (+{savas.get('puanDegisimi')} Điểm Rank | Rank: {savas.get('yeniPuan')})", Fore.GREEN)
                         break
 
-            # 3B. Chiến dịch XÂM LƯỢC (İSTİLA / INVASION)
-            istila = r_pvp.get("istila", {})
-            kalan_hak = istila.get("kalanHak", 0)
-            seviye = istila.get("seviye", 1)
-            dusman_gucu = istila.get("gosterilenDusmanGucu", 2300)
-            is_completed = istila.get("tamamlandi", False)
-
-            if not is_completed and kalan_hak > 0:
-                is_attack = (seviye % 2 == 1)
-                tur_name = "Tấn công Tiền đồn" if is_attack else "Phòng thủ Thuộc địa"
-                oyuncu_gucu = my_atk if is_attack else my_def
-
-                # NẾU LÀ ẢI PHÒNG THỦ VÀ THIẾU THỦ: NÂNG TƯỜNG THÀNH VỪA ĐỦ ĐỂ THẮNG
-                if not is_attack and my_def < dusman_gucu:
-                    if current_coins >= 100000:
-                        r_wall = requests.post(f"{API_BASE}/koloni/sur/al", headers=headers, json={"tur": "duvar", "kademe": "ahsap", "adet": 1}, timeout=8).json()
-                        if r_wall.get("ok"):
-                            my_def += 100
-                            oyuncu_gucu = my_def
-                            current_coins = max(0, current_coins - r_wall.get("harcanan", 100000))
-                            log("WALL_BUILD", f"🧱 Nâng thêm 1 Tường gỗ (Phòng thủ: {my_def}/{dusman_gucu}) vừa đủ để chuẩn bị thắng ải xâm lược!", Fore.YELLOW)
-
-                if oyuncu_gucu >= dusman_gucu:
-                    log("INVASION", f"🏴‍☠️ XUẤT KÍCH XÂM LƯỢC Ải {seviye} ({tur_name}): Ta {oyuncu_gucu} vs Địch {dusman_gucu}...", Fore.YELLOW)
-                    payload = {
-                        "seviye": seviye,
-                        "kurguSurumu": 4,
-                        "beklenenOyuncuGucu": oyuncu_gucu,
-                        "beklenenDusmanGucu": dusman_gucu,
-                        "komutId": str(uuid.uuid4())
-                    }
-                    r_ist = requests.post(f"{API_BASE}/pvp/istila/savas", headers=headers, json=payload, timeout=8).json()
-                    savas = r_ist.get("savas", {})
-                    if savas.get("kazandi"):
-                        rew_rgt = savas.get("odulRgt", 0)
-                        current_coins = r_ist.get("coins", current_coins + rew_rgt)
-                        log("INVASION_WIN", f"🏆 CHIẾN THẮNG XÂM LƯỢC ẢI {seviye}! {Fore.GREEN}+{rew_rgt:,} RGT Coins{Style.RESET_ALL} (Đã mở khóa Ải {seviye + 1})", Fore.GREEN)
-                    else:
-                        log("INVASION", f"Trận xâm lược ải {seviye} chưa thành công.", Fore.LIGHTBLACK_EX)
-                else:
-                    log("INVASION_INFO", f"⚔️ Xâm lược ải {seviye} ({tur_name}): Lực chiến {oyuncu_gucu}/{dusman_gucu} (Đang tích lũy để thắng chắc 100%)", Fore.LIGHTBLACK_EX)
-
+            # 3B. Chiến dịch XÂM LƯỢC: Đã tắt theo yêu cầu (bỏ check xâm lược)
             # 3C. Tự động huấn luyện lính gia tăng lực tấn công
             durum = r_pvp.get("durum", {})
             kuyruklar = durum.get("kuyruklar", {})
@@ -587,22 +546,11 @@ def start_continuous_mining():
             if time.time() - last_code_check >= 1800:
                 coins = auto_claim_rignite_codes(headers, STRING_SESSION, coins)
                 last_code_check = time.time()
-            # A. Kiểm tra QC kiếm coin định kỳ 50s
-            if time.time() - last_ad_coin_check >= 50:
-                coins, next_cd = try_watch_coins_ad(headers, coins)
-                last_ad_coin_check = time.time() - (50 - next_cd)
 
-            # B. Kiểm tra sự kiện phụ (Minigame, PVP, Spark, Thuộc địa) mỗi 90s
-            if time.time() - last_side_check >= 90:
-                coins = check_side_activities(headers, coins)
-                last_side_check = time.time()
-
-            # C. HỒI PHỤC NĂNG LƯỢNG SIÊU TỐC TỰ ĐỘNG (XEM 1 LƯỢT QC -> TAP 600 NGAY):
-            # - Tối ưu thời gian: Hồi phục +650 Energy trong 8.15s, lập tức tap 600 phát trong 0.5s
-            # - Loại bỏ hoàn toàn thời gian chết (không cần tích lũy 8 lượt QC 85s như trước)
+            # BƯỚC 1: HỒI PHỤC NĂNG LƯỢNG TAP (QC TAP) -> XẢ TAP NGAY LẬP TỨC
             if energy < 50:
                 target_views = 1
-                log("ENERGY", f"🔋 Năng lượng thấp ({energy}/{max_energy}). Xem 1 QC siêu tốc (8.15s) hồi phục để tap ngay...", Fore.CYAN)
+                log("ENERGY", f"⚡ Năng lượng tap thấp ({energy}/{max_energy}). Đang xem QC hồi năng lượng tap...", Fore.CYAN)
 
                 success_count = 0
                 max_attempts = target_views * 3
@@ -611,14 +559,14 @@ def start_continuous_mining():
                 while success_count < target_views and attempts < max_attempts and energy < max_energy * 0.95:
                     attempts += 1
                     ad_idx = success_count + 1
-                    log("AD_REFILL", f"📺 [Lượt QC {ad_idx}/{target_views}] Đang xem QC hồi năng lượng... (Đã có: {energy}/{max_energy})", Fore.CYAN)
+                    log("AD_REFILL", f"📺 [Lượt QC Tap {ad_idx}/{target_views}] Đang xem QC hồi năng lượng tap... (Đã có: {energy}/{max_energy})", Fore.CYAN)
                     ok, cd_or_energy, new_coins, new_ratio, info = try_refill_energy_ad(headers)
                     if ok:
                         success_count += 1
                         energy = cd_or_energy
                         coins = new_coins if new_coins > 0 else coins
                         ratio = new_ratio
-                        log("REFILL_STEP", f"⚡ Xong lượt QC {ad_idx}/{target_views}! Năng lượng hiện có: {Fore.GREEN}{energy}/{max_energy}{Style.RESET_ALL} ({info})", Fore.GREEN)
+                        log("REFILL_STEP", f"⚡ Xong QC Tap {ad_idx}/{target_views}! Năng lượng hiện có: {Fore.GREEN}{energy}/{max_energy}{Style.RESET_ALL} ({info})", Fore.GREEN)
 
                         if energy >= max_energy * 0.95:
                             log("REFILL_MAX", f"🔋 Năng lượng đã đạt tối đa ({energy}/{max_energy})!", Fore.GREEN)
@@ -633,9 +581,7 @@ def start_continuous_mining():
 
                 log("REFILL_READY", f"🔥 ĐÃ TÍCH ĐỦ NĂNG LƯỢNG ({energy}/{max_energy})! BẮT ĐẦU ẤN TAP XẢ OVERDRIVE x3 VÀNG LIÊN TIẾP! 🚀", Fore.MAGENTA)
 
-            # D. ĐÀO SIÊU TỐC MÔ PHỎNG TAP 2 NÚT XEN KẼ KÍCH HOẠT OVERDRIVE (x3 VÀNG):
-            # Nhịp tap xen kẽ liên tiếp (mỗi nhịp 25 - 30 taps cách nhau 0.12s)
-            # Nhịp 1-2 đẩy combo lên x1.5, từ nhịp 3 trở đi bùng nổ OVERDRIVE (od = True, tapMult = 3.0) ăn gấp 3 lần vàng!
+            # XẢ TAP SIÊU TỐC KÍCH HOẠT OVERDRIVE (x3 VÀNG)
             while energy >= 10:
                 chunk = min(30, max(1, energy // 10))
                 r_tap = requests.post(f"{API_BASE}/tap", headers=headers, json={"count": chunk}, timeout=10).json()
@@ -664,6 +610,16 @@ def start_continuous_mining():
 
                 log("TAP_COMBO", f"⚡ TAP 2 NÚT:{od_tag} -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
                 time.sleep(0.12)
+
+            # BƯỚC 2: SAU KHI TAP XONG -> KIỂM TRA & XEM QC PIN (SẠC PIN & COINS) ĐỊNH KỲ 45s
+            if time.time() - last_ad_coin_check >= 45:
+                coins, next_cd = try_watch_coins_ad(headers, coins)
+                last_ad_coin_check = time.time() - max(0, 45 - next_cd)
+
+            # BƯỚC 3: KIỂM TRA SỰ KIỆN PHỤ (Minigame, PVP Arena, Spark, Thuộc địa - KHÔNG CHECK XÂM LƯỢC) MỖI 90s
+            if time.time() - last_side_check >= 90:
+                coins = check_side_activities(headers, coins)
+                last_side_check = time.time()
 
         except Exception as e:
             log("WARN", f"Lỗi tạm thời: {e}. Tiếp tục ngay sau 2s...", Fore.YELLOW)
