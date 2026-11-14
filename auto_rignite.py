@@ -631,10 +631,9 @@ def start_continuous_mining():
                 log("TAP_COMBO", f"⚡ TAP 2 NÚT:{od_tag} -{used_energy} Energy | Còn lại: {energy}/{max_energy} | Số dư: {Fore.GREEN}{coins:,} Coins{Style.RESET_ALL}")
                 time.sleep(0.12)
 
-            # BƯỚC 2: SAU KHI TAP XONG -> XEM QC TRỰC TIẾP DƯỚI BÌNH ẮC QUY ĐỂ SẠC PIN (KHÔNG ĐỢI PIN CẠN)
-            if time.time() - last_battery_ad_check >= 45:
-                coins, next_cd, ok_batt = try_refill_battery_ad(headers, coins)
-                last_battery_ad_check = time.time() - max(0, 45 - next_cd)
+            # BƯỚC 2: SAU KHI TAP XONG -> COI QC HỒI PIN ẮC QUY LUÔN (KHÔNG CHỜ TIMER 45S)
+            log("BATTERY", "⚡ ĐÃ TAP XONG! Tiến hành coi QC hồi pin ắc quy luôn...", Fore.CYAN)
+            coins, next_cd, ok_batt = try_refill_battery_ad(headers, coins)
 
             # BƯỚC 2B: XEM QC NHẬN COINS & TĂNG THÊM PIN PHỤ TRỢ (60 lượt/ngày)
             if time.time() - last_ad_coin_check >= 50:
